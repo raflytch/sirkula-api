@@ -121,6 +121,16 @@ export class GreenWasteAiRepository {
         id,
         user_id: userId,
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar_url: true,
+          },
+        },
+      },
     });
   }
 
@@ -151,6 +161,16 @@ export class GreenWasteAiRepository {
       this.db.green_action.findMany({
         where,
         ...prismaOptions,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar_url: true,
+            },
+          },
+        },
       }),
       this.db.green_action.count({ where }),
     ]);
@@ -492,10 +512,16 @@ export class GreenWasteAiRepository {
       orderBy: { created_at: 'asc' },
     });
 
-    const monthMap = new Map<string, { totalActions: number; totalQuantity: number }>();
+    const monthMap = new Map<
+      string,
+      { totalActions: number; totalQuantity: number }
+    >();
     for (const action of actions) {
       const key = `${action.created_at.getFullYear()}-${String(action.created_at.getMonth() + 1).padStart(2, '0')}`;
-      const existing = monthMap.get(key) || { totalActions: 0, totalQuantity: 0 };
+      const existing = monthMap.get(key) || {
+        totalActions: 0,
+        totalQuantity: 0,
+      };
       existing.totalActions += 1;
       existing.totalQuantity += action.quantity;
       monthMap.set(key, existing);

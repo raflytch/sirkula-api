@@ -211,7 +211,14 @@ export class GreenWasteAiController {
       'Green action data with media file and coordinates (location info auto-generated via reverse geocoding)',
     schema: {
       type: 'object',
-      required: ['category', 'subCategory', 'quantity', 'latitude', 'longitude', 'media'],
+      required: [
+        'category',
+        'subCategory',
+        'quantity',
+        'latitude',
+        'longitude',
+        'media',
+      ],
       properties: {
         category: {
           type: 'string',
@@ -475,7 +482,10 @@ export class GreenWasteAiController {
       type: 'object',
       properties: {
         statusCode: { type: 'number', example: 200 },
-        message: { type: 'string', example: 'Impact data retrieved successfully' },
+        message: {
+          type: 'string',
+          example: 'Impact data retrieved successfully',
+        },
         data: {
           type: 'object',
           properties: {
@@ -523,7 +533,8 @@ export class GreenWasteAiController {
             },
             insight: {
               type: 'string',
-              example: 'Hingga saat ini, tercatat 342 aksi hijau terverifikasi...',
+              example:
+                'Hingga saat ini, tercatat 342 aksi hijau terverifikasi...',
             },
           },
         },

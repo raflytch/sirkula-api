@@ -123,6 +123,16 @@ export interface IGreenActionResponse {
   userId: string;
 
   /**
+   * User info (included when relation is loaded)
+   */
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+
+  /**
    * Main category of the action
    */
   category: string;

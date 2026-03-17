@@ -637,7 +637,7 @@ Analyze the provided media and respond with the JSON format specified above.`;
    * @returns {IGreenActionResponse} Mapped response
    */
   private mapToResponse(action: any): IGreenActionResponse {
-    return {
+    const response: IGreenActionResponse = {
       id: action.id,
       userId: action.user_id,
       category: action.category,
@@ -659,6 +659,17 @@ Analyze the provided media and respond with the JSON format specified above.`;
       createdAt: action.created_at,
       updatedAt: action.updated_at,
     };
+
+    if (action.user) {
+      response.user = {
+        id: action.user.id,
+        name: action.user.name,
+        email: action.user.email,
+        avatarUrl: action.user.avatar_url,
+      };
+    }
+
+    return response;
   }
 
   async getImpactWithInsight(): Promise<IImpactResponse> {
@@ -668,8 +679,7 @@ Analyze the provided media and respond with the JSON format specified above.`;
       this.repository.getMonthlyTrend(6),
     ]);
 
-    const topDistrict =
-      byDistrict.length > 0 ? byDistrict[0] : null;
+    const topDistrict = byDistrict.length > 0 ? byDistrict[0] : null;
 
     const insight = await this.generateImpactInsight(
       aggregation,
@@ -694,12 +704,18 @@ Analyze the provided media and respond with the JSON format specified above.`;
     topDistrict: IImpactResponse['topDistrict'],
   ): Promise<string> {
     const trendDescription = monthlyTrend
-      .map((t) => `${t.month}: ${t.totalActions} aksi, ${t.totalQuantity} kuantitas`)
+      .map(
+        (t) =>
+          `${t.month}: ${t.totalActions} aksi, ${t.totalQuantity} kuantitas`,
+      )
       .join('; ');
 
     const topDistrictsDescription = byDistrict
       .slice(0, 5)
-      .map((d) => `${d.district} (${d.city}): ${d.totalActions} aksi, ${d.totalQuantity} kuantitas`)
+      .map(
+        (d) =>
+          `${d.district} (${d.city}): ${d.totalActions} aksi, ${d.totalQuantity} kuantitas`,
+      )
       .join('; ');
 
     const prompt = `Kamu adalah analis dampak lingkungan untuk platform Circular Economy bernama Sirkula.

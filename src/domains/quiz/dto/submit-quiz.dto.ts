@@ -24,7 +24,10 @@ export class QuizAnswerDto {
   @Min(1)
   questionNumber: number;
 
-  @ApiProperty({ description: 'Index jawaban yang dipilih (0-based, maks 3)', example: 2 })
+  @ApiProperty({
+    description: 'Index jawaban yang dipilih (0-based, maks 3)',
+    example: 2,
+  })
   @IsNotEmpty()
   @IsInt()
   @Min(0)
@@ -33,12 +36,18 @@ export class QuizAnswerDto {
 }
 
 export class SubmitQuizDto {
-  @ApiProperty({ description: 'ID quiz session yang didapat dari endpoint generate', example: 'uuid-quiz-session' })
+  @ApiProperty({
+    description: 'ID quiz session yang didapat dari endpoint generate',
+    example: 'uuid-quiz-session',
+  })
   @IsNotEmpty()
   @IsUUID()
   quizId: string;
 
-  @ApiProperty({ description: 'Array berisi jawaban user untuk setiap soal', type: [QuizAnswerDto] })
+  @ApiProperty({
+    description: 'Array berisi jawaban user untuk setiap soal',
+    type: [QuizAnswerDto],
+  })
   @IsArray()
   @ArrayMinSize(10)
   @ValidateNested({ each: true })
