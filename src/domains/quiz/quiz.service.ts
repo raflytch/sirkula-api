@@ -252,14 +252,12 @@ PENTING:
           content: parsed.material.content,
           keyPoints: parsed.material.keyPoints,
         },
-        questions: parsed.questions.map(
-          (q: IQuizQuestionInternal) => ({
-            questionNumber: q.questionNumber,
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-          }),
-        ),
+        questions: parsed.questions.map((q: IQuizQuestionInternal) => ({
+          questionNumber: q.questionNumber,
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+        })),
       };
     } catch (error) {
       if (error instanceof BadRequestException) throw error;

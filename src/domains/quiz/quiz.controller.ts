@@ -59,12 +59,21 @@ export class QuizController {
             material: {
               type: 'object',
               properties: {
-                title: { type: 'string', example: 'Mengenal Pengelolaan Sampah Rumah Tangga' },
-                content: { type: 'string', example: 'Pengelolaan sampah rumah tangga adalah...' },
+                title: {
+                  type: 'string',
+                  example: 'Mengenal Pengelolaan Sampah Rumah Tangga',
+                },
+                content: {
+                  type: 'string',
+                  example: 'Pengelolaan sampah rumah tangga adalah...',
+                },
                 keyPoints: {
                   type: 'array',
                   items: { type: 'string' },
-                  example: ['Pisahkan sampah organik dan anorganik', 'Gunakan prinsip 3R'],
+                  example: [
+                    'Pisahkan sampah organik dan anorganik',
+                    'Gunakan prinsip 3R',
+                  ],
                 },
               },
             },
@@ -74,11 +83,20 @@ export class QuizController {
                 type: 'object',
                 properties: {
                   questionNumber: { type: 'number', example: 1 },
-                  question: { type: 'string', example: 'Apa kepanjangan dari 3R dalam pengelolaan sampah?' },
+                  question: {
+                    type: 'string',
+                    example:
+                      'Apa kepanjangan dari 3R dalam pengelolaan sampah?',
+                  },
                   options: {
                     type: 'array',
                     items: { type: 'string' },
-                    example: ['Reduce, Reuse, Recycle', 'Run, Rest, Repeat', 'Read, React, Resolve', 'Reduce, React, Reuse'],
+                    example: [
+                      'Reduce, Reuse, Recycle',
+                      'Run, Rest, Repeat',
+                      'Read, React, Resolve',
+                      'Reduce, React, Reuse',
+                    ],
                   },
                 },
               },
@@ -88,8 +106,14 @@ export class QuizController {
       },
     },
   })
-  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Gagal generate quiz dari AI' })
-  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token tidak valid atau kadaluarsa' })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Gagal generate quiz dari AI',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Token tidak valid atau kadaluarsa',
+  })
   async generateQuiz(@CurrentUser() user: JwtPayload) {
     const data = await this.quizService.generateQuiz(user.sub);
 
@@ -135,7 +159,10 @@ export class QuizController {
                 type: 'object',
                 properties: {
                   questionNumber: { type: 'number', example: 1 },
-                  question: { type: 'string', example: 'Apa kepanjangan dari 3R?' },
+                  question: {
+                    type: 'string',
+                    example: 'Apa kepanjangan dari 3R?',
+                  },
                   selectedAnswer: { type: 'number', example: 0 },
                   correctAnswer: { type: 'number', example: 0 },
                   isCorrect: { type: 'boolean', example: true },
@@ -148,9 +175,18 @@ export class QuizController {
       },
     },
   })
-  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Jawaban tidak valid atau session kadaluarsa' })
-  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Quiz session tidak ditemukan' })
-  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token tidak valid atau kadaluarsa' })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Jawaban tidak valid atau session kadaluarsa',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Quiz session tidak ditemukan',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Token tidak valid atau kadaluarsa',
+  })
   async submitQuiz(
     @CurrentUser() user: JwtPayload,
     @Body() dto: SubmitQuizDto,
@@ -172,8 +208,20 @@ export class QuizController {
     summary: 'Riwayat quiz user',
     description: 'Mendapatkan daftar riwayat quiz dengan paginasi',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Nomor halaman (default: 1)', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Jumlah per halaman (default: 10)', example: 10 })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Nomor halaman (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Jumlah per halaman (default: 10)',
+    example: 10,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Riwayat quiz berhasil diambil',
@@ -211,7 +259,10 @@ export class QuizController {
       },
     },
   })
-  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Token tidak valid atau kadaluarsa' })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Token tidak valid atau kadaluarsa',
+  })
   async getHistory(
     @CurrentUser() user: JwtPayload,
     @Query() query: QueryQuizHistoryDto,
