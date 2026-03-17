@@ -1,0 +1,282 @@
+/**
+ * @fileoverview Prisma Schema for Sirkula
+ * @description Database schema using PostgreSQL
+ * @tagline Sense Every Action, Reward Every Impact
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * User model
+ * @description Stores user data including UMKM profile for UMKM role users
+ */
+model user {
+  id            String  @id @default(uuid())
+  email         String  @unique
+  name          String
+  password_hash String?
+
+  role       UserRole
+  avatar_url String?
+
+  /**
+   * Google OAuth ID - for users who login via Google
+   */
+  google_id String? @unique
+
+  /**
+   * Email verification status
+   */
+  is_email_verified Boolean @default(false)
+
+  /**
+   * UMKM Profile - Only filled for users with UMKM role
+   */
+  umkm_name        String?
+  umkm_description String?
+  umkm_logo_url    String?
+  umkm_address     String?
+  umkm_category    String?
+
+  total_points Int     @default(0)
+  is_active    Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  /**
+   * Relations
+   */
+  green_actions  green_action[]
+  voucher_claims voucher_claim[]
+  vouchers       voucher[]
+  otp_codes      otp_code[]
+  quiz_histories quiz_history[]
+  quiz_sessions  quiz_session[]
+
+  @@index([role])
+}
+
+/**
+ * OTP Code model
+ * @description Stores OTP codes for email verification
+ */
+model otp_code {
+  id      String  @id @default(uuid())
+  user_id String?
+  user    user?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /**
+   * Email for OTP
+   */
+  email String
+
+  /**
+   * OTP code and verification status
+   */
+  code        String
+  is_used     Boolean  @default(false)
+  is_verified Boolean  @default(false)
+  expires_at  DateTime
+
+  /**
+   * OTP purpose: REGISTER, DELETE_ACCOUNT, VERIFY_EMAIL
+   */
+  purpose String
+
+  created_at DateTime @default(now())
+
+  @@index([email, code])
+  @@index([expires_at])
+}
+
+/**
+ * User Role Enum
+ * @description WARGA - Regular user, UMKM - Small business, DLH - Environment agency, ADMIN - System admin
+ */
+enum UserRole {
+  WARGA
+  UMKM
+  DLH
+  ADMIN
+}
+
+/**
+ * Green Action model
+ * @description Stores green actions performed by users with AI verification results
+ */
+model green_action {
+  id      String @id @default(uuid())
+  user_id String
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /**
+   * Category: PILAH_SAMPAH, TANAM_POHON, KONSUMSI_HIJAU, AKSI_KOLEKTIF
+   */
+  category    String
+  description String?
+
+  /**
+   * Quantitative data for impact measurement
+   */
+  quantity    Float    @default(0)
+  action_type String?
+
+  /**
+   * Location data for map integration (Leaflet)
+   */
+  location_name String?
+  latitude      Float?
+  longitude     Float?
+  district      String?
+  city          String?
+
+  /**
+   * Media upload for verification
+   */
+  media_url  String
+  media_type String
+
+  /**
+   * AI verification results
+   */
+  status      String  @default("PENDING")
+  ai_score    Int?
+  ai_feedback String?
+  ai_labels   String?
+
+  /**
+   * Points calculated from AI
+   */
+  points Int @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  voucher_claims voucher_claim[]
+
+  @@index([user_id])
+  @@index([category])
+  @@index([status])
+  @@index([created_at])
+  @@index([district])
+  @@index([city])
+}
+
+/**
+ * Voucher model
+ * @description Vouchers provided by UMKM that users can redeem with points
+ */
+model voucher {
+  id      String @id @default(uuid())
+  umkm_id String
+  umkm    user   @relation(fields: [umkm_id], references: [id], onDelete: Cascade)
+
+  name            String
+  description     String
+  image_url       String?
+  points_required Int
+
+  /**
+   * Discount type - either percentage or fixed amount
+   */
+  discount_percentage Int?
+  discount_amount     Int?
+
+  /**
+   * Voucher quota
+   */
+  quota_total Int
+  quota_used  Int @default(0)
+
+  is_active   Boolean  @default(true)
+  valid_from  DateTime
+  valid_until DateTime
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  voucher_claims voucher_claim[]
+
+  @@index([umkm_id])
+  @@index([is_active])
+  @@index([valid_until])
+}
+
+/**
+ * Voucher Claim model
+ * @description Stores voucher claims by users with status: PENDING, USED, EXPIRED
+ */
+model voucher_claim {
+  id      String @id @default(uuid())
+  user_id String
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  voucher_id String
+  voucher    voucher @relation(fields: [voucher_id], references: [id], onDelete: Cascade)
+
+  /**
+   * Optional relation to green_action for tracking
+   */
+  green_action_id String?
+  green_action    green_action? @relation(fields: [green_action_id], references: [id], onDelete: SetNull)
+
+  status     String    @default("PENDING")
+  claimed_at DateTime  @default(now())
+  used_at    DateTime?
+
+  @@index([user_id])
+  @@index([voucher_id])
+}
+
+/**
+ * Quiz Session model
+ * @description Temporary server-side storage for AI-generated answer keys.
+ * The answer_key JSON is NEVER sent to the client.
+ * Sessions are consumed once the user submits answers.
+ */
+model quiz_session {
+  id         String  @id @default(uuid())
+  user_id    String
+  user       user    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /**
+   * JSON array of { questionNumber, correctAnswer } objects.
+   * Kept server-side only — stripped from every API response.
+   */
+  answer_key String
+
+  is_used    Boolean  @default(false)
+  expires_at DateTime
+
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+  @@index([expires_at])
+}
+
+/**
+ * Quiz History model
+ * @description Stores quiz results and earned points from green action education quizzes
+ */
+model quiz_history {
+  id              String @id @default(uuid())
+  user_id         String
+  user            user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  score           Int
+  total_questions Int
+  correct_answers Int
+  points          Int
+
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+  @@index([created_at])
+}
