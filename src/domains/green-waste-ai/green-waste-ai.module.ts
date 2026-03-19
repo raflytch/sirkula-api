@@ -8,6 +8,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { GreenWasteAiController } from './green-waste-ai.controller';
 import { GreenWasteAiService } from './green-waste-ai.service';
+import { GreenWasteAiReportService } from './green-waste-ai-report.service';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
 import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
 
@@ -30,7 +31,11 @@ import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
     GeocodingModule,
   ],
   controllers: [GreenWasteAiController],
-  providers: [GreenWasteAiService, GreenWasteAiRepository],
+  providers: [
+    GreenWasteAiService,
+    GreenWasteAiReportService,
+    GreenWasteAiRepository,
+  ],
   exports: [GreenWasteAiService],
 })
 export class GreenWasteAiModule {}

@@ -496,6 +496,132 @@ export class GreenWasteAiRepository {
     }));
   }
 
+  async getDistinctKelurahans(): Promise<{ district: string; city: string }[]> {
+    const results = await this.db.green_action.findMany({
+      where: {
+        status: GreenActionStatus.VERIFIED,
+        district: { not: null },
+      },
+      distinct: ['district', 'city'],
+      select: {
+        district: true,
+        city: true,
+      },
+      orderBy: { district: 'asc' },
+    });
+
+    return results
+      .filter((r) => r.district)
+      .map((r) => ({
+        district: r.district!,
+        city: r.city || '',
+      }));
+  }
+
+  async getKelurahanReport(district: string): Promise<{
+    district: string;
+    city: string;
+    totalActions: number;
+    totalQuantity: number;
+    verifiedActions: number;
+    rejectedActions: number;
+    totalPoints: number;
+    totalUsers: number;
+    byCategory: { category: string; count: number; quantity: number }[];
+    recentActions: {
+      category: string;
+      description: string | null;
+      quantity: number;
+      actionType: string | null;
+      points: number;
+      locationName: string | null;
+      createdAt: Date;
+      userName: string;
+    }[];
+  }> {
+    const whereBase = {
+      district: { equals: district, mode: 'insensitive' as const },
+      status: GreenActionStatus.VERIFIED,
+    };
+
+    const [
+      aggregation,
+      categoryStats,
+      distinctUsers,
+      recentActions,
+      cityResult,
+    ] = await Promise.all([
+      this.db.green_action.aggregate({
+        where: whereBase,
+        _sum: { quantity: true, points: true },
+        _count: { id: true },
+      }),
+      this.db.green_action.groupBy({
+        by: ['category'],
+        where: whereBase,
+        _count: { id: true },
+        _sum: { quantity: true },
+      }),
+      this.db.green_action.findMany({
+        where: whereBase,
+        distinct: ['user_id'],
+        select: { user_id: true },
+      }),
+      this.db.green_action.findMany({
+        where: whereBase,
+        take: 20,
+        orderBy: { created_at: 'desc' },
+        select: {
+          category: true,
+          description: true,
+          quantity: true,
+          action_type: true,
+          points: true,
+          location_name: true,
+          created_at: true,
+          user: { select: { name: true } },
+        },
+      }),
+      this.db.green_action.findFirst({
+        where: { district: { equals: district, mode: 'insensitive' } },
+        select: { city: true },
+      }),
+    ]);
+
+    const rejectedCount = await this.db.green_action.count({
+      where: {
+        district: { equals: district, mode: 'insensitive' },
+        status: GreenActionStatus.REJECTED,
+      },
+    });
+
+    return {
+      district,
+      city: cityResult?.city || '',
+      totalActions: aggregation._count.id,
+      totalQuantity: aggregation._sum.quantity || 0,
+      verifiedActions: aggregation._count.id,
+      rejectedActions: rejectedCount,
+      totalPoints: aggregation._sum.points || 0,
+      totalUsers: distinctUsers.length,
+      byCategory: categoryStats.map((s) => ({
+        category: s.category,
+        count: s._count.id,
+        quantity: s._sum.quantity || 0,
+      })),
+      recentActions: recentActions.map((a) => ({
+        category: a.category,
+        description: a.description,
+        quantity: a.quantity,
+        actionType: a.action_type,
+        points: a.points,
+        locationName: a.location_name,
+        createdAt: a.created_at,
+        userName: a.user?.name || 'Anonim',
+      })),
+    };
+  }
+
   async getMonthlyTrend(months: number = 6): Promise<IMonthlyTrend[]> {
     const since = new Date();
     since.setMonth(since.getMonth() - months);

@@ -718,7 +718,7 @@ Analyze the provided media and respond with the JSON format specified above.`;
       )
       .join('; ');
 
-    const prompt = `Kamu adalah analis dampak lingkungan untuk platform Circular Economy bernama Sirkula.
+    const prompt = `Kamu adalah analis dampak lingkungan untuk platform Sense Every Action, Reward Every Impact bernama Sirkula.
 Berdasarkan DATA NYATA berikut, buatkan insight naratif dalam Bahasa Indonesia yang menjelaskan dampak lingkungan dari aksi hijau (green action) yang telah dilakukan pengguna.
 
 DATA AGREGASI:

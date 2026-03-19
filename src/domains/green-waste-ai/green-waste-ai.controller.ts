@@ -14,10 +14,12 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -35,6 +37,7 @@ import { Roles } from '../../commons/decorators/roles.decorator';
 import { CurrentUser } from '../../commons/decorators/current-user.decorator';
 import { JwtPayload } from '../../commons/strategies/jwt.strategy';
 import { GreenWasteAiService } from './green-waste-ai.service';
+import { GreenWasteAiReportService } from './green-waste-ai-report.service';
 import { CreateGreenActionDto } from './dto/create-green-action.dto';
 import {
   QueryGreenActionDto,
@@ -52,7 +55,10 @@ export class GreenWasteAiController {
    * Inject green waste AI service
    * @param {GreenWasteAiService} greenWasteAiService - Green waste AI service
    */
-  constructor(private readonly greenWasteAiService: GreenWasteAiService) {}
+  constructor(
+    private readonly greenWasteAiService: GreenWasteAiService,
+    private readonly reportService: GreenWasteAiReportService,
+  ) {}
 
   /**
    * Get categories and sub-categories info (public endpoint)
@@ -351,12 +357,96 @@ export class GreenWasteAiController {
     };
   }
 
-  /**
-   * Get current user's green actions
-   * @param {JwtPayload} user - Current authenticated user
-   * @param {QueryGreenActionDto} query - Query parameters
-   * @returns {Promise<object>} Paginated green actions
-   */
+  @Get('districts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get distinct districts from green actions',
+    description:
+      'Get list of unique district names from verified green action data. Admin/DLH only.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Districts retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: {
+          type: 'string',
+          example: 'Districts retrieved successfully',
+        },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              district: { type: 'string', example: 'Menteng' },
+              city: { type: 'string', example: 'Jakarta Pusat' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getDistricts() {
+    const data = await this.reportService.getDistinctDistricts();
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Districts retrieved successfully',
+      data,
+    };
+  }
+
+  @Get('reports/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Export district report as PDF',
+    description:
+      'Generate and download a formal PDF report for a specific district based on real green action data. Admin/DLH only.',
+  })
+  @ApiQuery({
+    name: 'district',
+    required: true,
+    type: String,
+    description: 'District name to generate the report for',
+    example: 'Menteng',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'PDF report generated successfully',
+    content: {
+      'application/pdf': {
+        schema: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'No verified green action data found for the district',
+  })
+  async getDistrictReportPdf(
+    @Query('district') district: string,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.reportService.generateDistrictPdf(district);
+
+    const safeFileName = district.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="Laporan_Aksi_Hijau_${safeFileName}.pdf"`,
+      'Content-Length': pdfBuffer.length,
+    });
+
+    res.end(pdfBuffer);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
