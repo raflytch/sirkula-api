@@ -1,172 +1,118 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { GoogleGenAI } from '@google/genai';
+import axios, { AxiosInstance } from 'axios';
 import { AppConfigService } from '../../config/config.service';
 import {
   IGenerateContentRequest,
   IGenerateContentResponse,
   IMediaFile,
+  IGeminiRestRequestBody,
+  IGeminiRestResponse,
+  IGeminiPart,
 } from './interfaces/google-gen-ai.interface';
 
-/**
- * Service for interacting with Google Generative AI
- * Provides reusable methods for content generation with Gemini 2.5 Flash
- */
 @Injectable()
 export class GoogleGenAiService implements OnModuleInit {
   private readonly logger = new Logger(GoogleGenAiService.name);
-  private genAI: GoogleGenAI;
-  private readonly modelName = 'gemini-2.5-flash';
+  private httpClient: AxiosInstance;
+  private apiKey: string;
+  private initialized = false;
+
+  private readonly MODEL_NAME = 'gemini-2.5-flash';
+  private readonly BASE_URL =
+    'https://generativelanguage.googleapis.com/v1beta/models';
 
   constructor(private readonly configService: AppConfigService) {}
 
-  /**
-   * Initializes the Google Gen AI client on module start
-   * Validates API key configuration
-   */
   onModuleInit(): void {
-    const apiKey = this.configService.googleGenAiApiKey;
+    this.apiKey = this.configService.googleGenAiApiKey;
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       this.logger.warn('GOOGLE_GENAI_API_KEY is not configured');
       return;
     }
 
-    this.genAI = new GoogleGenAI({ apiKey });
-    this.logger.log('Google Gen AI client initialized successfully');
+    this.httpClient = axios.create({
+      baseURL: this.BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.apiKey,
+      },
+      timeout: 120_000,
+    });
+
+    this.initialized = true;
+    this.logger.log('Google Gen AI REST client initialized successfully');
   }
 
-  /**
-   * Generates content using text prompt only
-   * Simplest method for text-based generation
-   *
-   * @param prompt - Text prompt for content generation
-   * @returns Generated content response
-   */
   async generateFromText(prompt: string): Promise<IGenerateContentResponse> {
     return this.generateContent({ prompt });
   }
 
-  /**
-   * Generates content using text prompt with a single image
-   * Useful for image analysis and description tasks
-   *
-   * @param prompt - Text prompt for content generation
-   * @param image - Image file to analyze
-   * @returns Generated content response
-   */
   async generateFromTextAndImage(
     prompt: string,
     image: IMediaFile,
   ): Promise<IGenerateContentResponse> {
-    return this.generateContent({
-      prompt,
-      mediaFiles: [image],
-    });
+    return this.generateContent({ prompt, mediaFiles: [image] });
   }
 
-  /**
-   * Generates content using text prompt with a single video
-   * Useful for video analysis and summarization tasks
-   *
-   * @param prompt - Text prompt for content generation
-   * @param video - Video file to analyze
-   * @returns Generated content response
-   */
   async generateFromTextAndVideo(
     prompt: string,
     video: IMediaFile,
   ): Promise<IGenerateContentResponse> {
-    return this.generateContent({
-      prompt,
-      mediaFiles: [video],
-    });
+    return this.generateContent({ prompt, mediaFiles: [video] });
   }
 
-  /**
-   * Generates content using text prompt with multiple media files
-   * Supports combining images and videos in a single request
-   *
-   * @param prompt - Text prompt for content generation
-   * @param mediaFiles - Array of media files to include
-   * @returns Generated content response
-   */
   async generateFromTextAndMedia(
     prompt: string,
     mediaFiles: IMediaFile[],
   ): Promise<IGenerateContentResponse> {
-    return this.generateContent({
-      prompt,
-      mediaFiles,
-    });
+    return this.generateContent({ prompt, mediaFiles });
   }
 
-  /**
-   * Main method for generating content with Google Gen AI
-   * Handles both text-only and multimodal (text + media) requests
-   *
-   * @param request - Content generation request with prompt and optional media
-   * @returns Generated content response with success status
-   */
   async generateContent(
     request: IGenerateContentRequest,
   ): Promise<IGenerateContentResponse> {
     try {
-      if (!this.genAI) {
-        throw new Error('Google Gen AI client is not initialized');
+      if (!this.initialized) {
+        throw new Error('Google Gen AI REST client is not initialized');
       }
 
-      const contents = this.buildContents(request);
+      const requestBody = this.buildRequestBody(request);
+      const endpoint = `/${this.MODEL_NAME}:generateContent`;
 
-      const response = await this.genAI.models.generateContent({
-        model: this.modelName,
-        contents,
-        config: request.generationConfig
-          ? {
-              temperature: request.generationConfig.temperature,
-              topP: request.generationConfig.topP,
-              topK: request.generationConfig.topK,
-              maxOutputTokens: request.generationConfig.maxOutputTokens,
-              stopSequences: request.generationConfig.stopSequences,
-            }
-          : undefined,
-      });
+      const { data } = await this.httpClient.post<IGeminiRestResponse>(
+        endpoint,
+        requestBody,
+      );
 
-      const text = response.text || '';
+      if (data.error) {
+        throw new Error(`Gemini API error: ${data.error.message}`);
+      }
 
-      return {
-        text,
-        success: true,
-      };
+      const text = this.extractTextFromResponse(data);
+
+      return { text, success: true };
     } catch (error) {
       this.logger.error('Failed to generate content', error);
 
-      return {
-        text: '',
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      const errorMessage = this.extractErrorMessage(error);
+
+      return { text: '', success: false, error: errorMessage };
     }
   }
 
-  /**
-   * Builds the contents array for the API request
-   * Combines text prompt with optional media files
-   *
-   * @param request - Content generation request
-   * @returns Formatted contents array for the API
-   */
-  private buildContents(request: IGenerateContentRequest): Array<{
-    role: string;
-    parts: Array<{
-      text?: string;
-      inlineData?: { mimeType: string; data: string };
-    }>;
-  }> {
-    const parts: Array<{
-      text?: string;
-      inlineData?: { mimeType: string; data: string };
-    }> = [];
+  bufferToBase64(buffer: Buffer): string {
+    return buffer.toString('base64');
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  private buildRequestBody(
+    request: IGenerateContentRequest,
+  ): IGeminiRestRequestBody {
+    const parts: IGeminiPart[] = [];
 
     if (request.mediaFiles && request.mediaFiles.length > 0) {
       for (const mediaFile of request.mediaFiles) {
@@ -181,32 +127,60 @@ export class GoogleGenAiService implements OnModuleInit {
 
     parts.push({ text: request.prompt });
 
-    return [
-      {
-        role: 'user',
-        parts,
-      },
-    ];
+    const body: IGeminiRestRequestBody = {
+      contents: [{ role: 'user', parts }],
+    };
+
+    if (request.generationConfig) {
+      body.generationConfig = {
+        temperature: request.generationConfig.temperature,
+        topP: request.generationConfig.topP,
+        topK: request.generationConfig.topK,
+        maxOutputTokens: request.generationConfig.maxOutputTokens,
+        stopSequences: request.generationConfig.stopSequences,
+      };
+    }
+
+    return body;
   }
 
-  /**
-   * Converts a Buffer to base64 encoded string
-   * Helper method for processing file uploads
-   *
-   * @param buffer - File buffer to convert
-   * @returns Base64 encoded string
-   */
-  bufferToBase64(buffer: Buffer): string {
-    return buffer.toString('base64');
+  private extractTextFromResponse(response: IGeminiRestResponse): string {
+    const candidates = response.candidates;
+
+    if (!candidates || candidates.length === 0) {
+      throw new Error('No candidates returned from Gemini API');
+    }
+
+    const firstCandidate = candidates[0];
+    const parts = firstCandidate.content?.parts;
+
+    if (!parts || parts.length === 0) {
+      throw new Error('No content parts in Gemini API response');
+    }
+
+    return parts.map((part) => part.text || '').join('');
   }
 
-  /**
-   * Checks if the service is properly initialized
-   * Useful for health checks and validation
-   *
-   * @returns True if the client is ready
-   */
-  isInitialized(): boolean {
-    return !!this.genAI;
+  private extractErrorMessage(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const apiError = error.response?.data?.error;
+
+      if (apiError?.message) {
+        return `Gemini API error (${status}): ${apiError.message}`;
+      }
+
+      if (error.code === 'ECONNABORTED') {
+        return 'Gemini API request timed out';
+      }
+
+      return `Gemini API HTTP error: ${status || error.message}`;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Unknown error occurred';
   }
 }
