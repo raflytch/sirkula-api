@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument = require('pdfkit');
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
 import { GoogleGenAiService } from '../../libs/google-genai/google-gen-ai.service';
 
