@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import PDFDocument = require('pdfkit');
+import * as ExcelJS from 'exceljs';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
 import { GoogleGenAiService } from '../../libs/google-genai/google-gen-ai.service';
 
@@ -38,6 +39,95 @@ export class GreenWasteAiReportService {
 
     const narrative = await this.generateNarrative(report);
     return this.buildPdf(report, narrative);
+  }
+
+  async generateDistrictExcel(district: string): Promise<Buffer> {
+    const actions = await this.repository.findAllByDistrict(district);
+
+    if (actions.length === 0) {
+      throw new NotFoundException(
+        `No green action data found for district "${district}"`,
+      );
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Sirkula';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Green Actions');
+
+    sheet.columns = [
+      { header: 'No', key: 'no', width: 5 },
+      { header: 'ID', key: 'id', width: 20 },
+      { header: 'Kategori', key: 'category', width: 22 },
+      { header: 'Deskripsi', key: 'description', width: 35 },
+      { header: 'Kuantitas', key: 'quantity', width: 12 },
+      { header: 'Satuan', key: 'actionType', width: 10 },
+      { header: 'Status', key: 'status', width: 18 },
+      { header: 'Skor AI', key: 'aiScore', width: 10 },
+      { header: 'Feedback AI', key: 'aiFeedback', width: 40 },
+      { header: 'Poin', key: 'points', width: 8 },
+      { header: 'Lokasi', key: 'locationName', width: 28 },
+      { header: 'Kelurahan', key: 'district', width: 18 },
+      { header: 'Kota', key: 'city', width: 18 },
+      { header: 'Latitude', key: 'latitude', width: 14 },
+      { header: 'Longitude', key: 'longitude', width: 14 },
+      { header: 'Media URL', key: 'mediaUrl', width: 40 },
+      { header: 'Tipe Media', key: 'mediaType', width: 10 },
+      { header: 'Nama Warga', key: 'userName', width: 22 },
+      { header: 'Email Warga', key: 'userEmail', width: 28 },
+      { header: 'Tanggal', key: 'createdAt', width: 20 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1B5E20' },
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.height = 24;
+
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i] as any;
+      sheet.addRow({
+        no: i + 1,
+        id: a.id,
+        category: CATEGORY_LABELS[a.category] || a.category,
+        description: a.description || '',
+        quantity: a.quantity,
+        actionType: a.action_type || '',
+        status: a.status,
+        aiScore: a.ai_score,
+        aiFeedback: a.ai_feedback || '',
+        points: a.points,
+        locationName: a.location_name || '',
+        district: a.district || '',
+        city: a.city || '',
+        latitude: a.latitude,
+        longitude: a.longitude,
+        mediaUrl: a.media_url,
+        mediaType: a.media_type,
+        userName: a.user?.name || '',
+        userEmail: a.user?.email || '',
+        createdAt: a.created_at,
+      });
+    }
+
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      row.alignment = { vertical: 'middle', wrapText: true };
+      row.font = { size: 10 };
+    });
+
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: sheet.columns.length },
+    };
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   private async generateNarrative(report: KelurahanReport): Promise<string> {

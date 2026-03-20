@@ -447,6 +447,54 @@ export class GreenWasteAiController {
     res.end(pdfBuffer);
   }
 
+  @Get('reports/excel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Export district raw data as Excel',
+    description:
+      'Generate and download an Excel file with raw green action data for a specific district. Admin/DLH only.',
+  })
+  @ApiQuery({
+    name: 'district',
+    required: true,
+    type: String,
+    description: 'District name to export data for',
+    example: 'Menteng',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Excel file generated successfully',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'No green action data found for the district',
+  })
+  async getDistrictReportExcel(
+    @Query('district') district: string,
+    @Res() res: Response,
+  ) {
+    const excelBuffer =
+      await this.reportService.generateDistrictExcel(district);
+
+    const safeFileName = district.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="Data_Aksi_Hijau_${safeFileName}.xlsx"`,
+      'Content-Length': excelBuffer.length,
+    });
+
+    res.end(excelBuffer);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')

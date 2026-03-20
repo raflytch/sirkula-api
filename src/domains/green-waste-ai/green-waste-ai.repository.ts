@@ -622,6 +622,24 @@ export class GreenWasteAiRepository {
     };
   }
 
+  async findAllByDistrict(district: string): Promise<green_action[]> {
+    return this.db.green_action.findMany({
+      where: {
+        district: { equals: district, mode: 'insensitive' },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
   async getMonthlyTrend(months: number = 6): Promise<IMonthlyTrend[]> {
     const since = new Date();
     since.setMonth(since.getMonth() - months);
