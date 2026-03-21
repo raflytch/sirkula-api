@@ -703,59 +703,34 @@ Analyze the provided media and respond with the JSON format specified above.`;
     monthlyTrend: IImpactResponse['monthlyTrend'],
     topDistrict: IImpactResponse['topDistrict'],
   ): Promise<string> {
-    const trendDescription = monthlyTrend
-      .map(
-        (t) =>
-          `${t.month}: ${t.totalActions} aksi, ${t.totalQuantity} kuantitas`,
-      )
-      .join('; ');
+    const latestTrend =
+      monthlyTrend.length >= 2
+        ? `Bulan terakhir: ${monthlyTrend[0].totalActions} aksi vs bulan sebelumnya: ${monthlyTrend[1].totalActions} aksi`
+        : '';
 
-    const topDistrictsDescription = byDistrict
-      .slice(0, 5)
-      .map(
-        (d) =>
-          `${d.district} (${d.city}): ${d.totalActions} aksi, ${d.totalQuantity} kuantitas`,
-      )
-      .join('; ');
+    const prompt = `Kamu adalah analis dampak lingkungan platform Sirkula. Buatkan insight SINGKAT (maksimal 2-3 kalimat) dalam Bahasa Indonesia berdasarkan data berikut.
 
-    const prompt = `Kamu adalah analis dampak lingkungan untuk platform Sense Every Action, Reward Every Impact bernama Sirkula.
-Berdasarkan DATA NYATA berikut, buatkan insight naratif dalam Bahasa Indonesia yang menjelaskan dampak lingkungan dari aksi hijau (green action) yang telah dilakukan pengguna.
+DATA:
+- ${aggregation.totalActions} aksi terverifikasi, kuantitas ${aggregation.totalQuantity}
+- Tersebar di ${aggregation.totalUniqueDistricts} kecamatan, ${aggregation.totalUniqueCities} kota
+${topDistrict ? `- Wilayah paling aktif: ${topDistrict.district} (${topDistrict.city}), ${topDistrict.totalActions} aksi` : ''}
+${latestTrend ? `- ${latestTrend}` : ''}
 
-DATA AGREGASI:
-- Total kuantitas aksi: ${aggregation.totalQuantity}
-- Total jumlah aksi terverifikasi: ${aggregation.totalActions}
-- Total wilayah (kecamatan) unik terdampak: ${aggregation.totalUniqueDistricts}
-- Total kota unik terdampak: ${aggregation.totalUniqueCities}
-
-DATA PER WILAYAH (top 5):
-${topDistrictsDescription || 'Belum ada data per wilayah'}
-
-TREN BULANAN (6 bulan terakhir):
-${trendDescription || 'Belum ada data tren'}
-
-WILAYAH PALING AKTIF:
-${topDistrict ? `${topDistrict.district} (${topDistrict.city}) dengan ${topDistrict.totalActions} aksi dan ${topDistrict.totalQuantity} kuantitas` : 'Belum ada data'}
-
-INSTRUKSI:
-1. Buat ringkasan dampak keseluruhan (1-2 kalimat)
-2. Interpretasi dari total kuantitas dan jumlah aksi
-3. Gambaran sebaran wilayah dan cakupannya
-4. Analisis tren (apakah meningkat, menurun, atau stabil)
-5. Highlight wilayah paling aktif
-6. Implikasi terhadap lingkungan dan circular economy
-
-ATURAN KETAT:
-- HANYA gunakan angka dari data di atas, JANGAN mengarang angka
-- Jika data kecil (< 10 aksi), jelaskan bahwa program masih dalam tahap awal
-- Jika data besar (> 100 aksi), jelaskan dampak signifikan
-- Jika wilayah sedikit (< 3), jelaskan cakupan masih terbatas
-- Jika wilayah banyak (> 10), jelaskan distribusi yang luas
-- Jika tidak ada data tren, jangan membahas tren
-- Gunakan gaya bahasa laporan singkat yang profesional dan mudah dipahami
-- Maksimal 300 kata`;
+ATURAN:
+- HANYA 2-3 kalimat, JANGAN lebih
+- Gunakan angka dari data, jangan mengarang
+- Jika < 10 aksi, sebut program masih tahap awal
+- Bahasa profesional, padat, dan informatif
+- JANGAN gunakan heading, bullet point, atau formatting apapun`;
 
     try {
-      const response = await this.genAiService.generateFromText(prompt);
+      const response = await this.genAiService.generateContent({
+        prompt,
+        generationConfig: {
+          maxOutputTokens: 200,
+          temperature: 0.5,
+        },
+      });
 
       if (!response.success || !response.text) {
         this.logger.warn('AI insight generation failed, using fallback');
