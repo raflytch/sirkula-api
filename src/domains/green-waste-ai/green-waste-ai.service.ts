@@ -728,7 +728,7 @@ ATURAN:
       const response = await this.genAiService.generateContent({
         prompt,
         generationConfig: {
-          maxOutputTokens: 200,
+          maxOutputTokens: 500,
           temperature: 0.5,
         },
       });
