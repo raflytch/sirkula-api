@@ -719,7 +719,8 @@ ${latestTrend ? `- ${latestTrend}` : ''}
 ATURAN:
 - HANYA 2-3 kalimat, JANGAN lebih
 - Gunakan angka dari data, jangan mengarang
-- Jika < 10 aksi, sebut program masih tahap awal
+- Jika 0 aksi, sebut program masih tahap awal dan belum ada data
+- Jika ada aksi (berapapun jumlahnya), deskripsikan dampak dan pencapaiannya
 - Bahasa profesional, padat, dan informatif
 - JANGAN gunakan heading, bullet point, atau formatting apapun`;
 
