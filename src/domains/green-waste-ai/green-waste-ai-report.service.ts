@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require('pdfkit');
 import * as ExcelJS from 'exceljs';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
