@@ -15,6 +15,7 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { GoogleGenAiService } from '../../libs/google-genai/google-gen-ai.service';
 import { QuizRepository } from './quiz.repository';
@@ -37,6 +38,7 @@ export class QuizService {
   private readonly TOTAL_QUESTIONS = 10;
   private readonly TOTAL_OPTIONS = 4;
   private readonly SESSION_TTL_MINUTES = 60;
+  private readonly MAX_WEEKLY_QUIZZES = 2;
 
   constructor(
     private readonly genAiService: GoogleGenAiService,
@@ -49,6 +51,13 @@ export class QuizService {
    */
   async generateQuiz(userId: string): Promise<IGeneratedQuizResponse> {
     this.logger.log(`Generating quiz for user ${userId}`);
+
+    const weeklyCount = await this.repository.countWeeklyQuizzes(userId);
+    if (weeklyCount >= this.MAX_WEEKLY_QUIZZES) {
+      throw new ForbiddenException(
+        'Anda sudah mencapai batas maksimal 2 kali quiz per minggu. Silakan coba lagi minggu depan.',
+      );
+    }
 
     const prompt = this.buildPrompt();
     const response = await this.genAiService.generateFromText(prompt);

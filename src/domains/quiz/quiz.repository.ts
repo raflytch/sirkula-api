@@ -76,6 +76,21 @@ export class QuizRepository {
     return createPaginatedResult(data, total, query);
   }
 
+  async countWeeklyQuizzes(userId: string): Promise<number> {
+    const now = new Date();
+    const day = now.getDay();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    return this.db.quiz_history.count({
+      where: {
+        user_id: userId,
+        created_at: { gte: startOfWeek },
+      },
+    });
+  }
+
   async addUserPoints(userId: string, points: number): Promise<void> {
     await this.db.user.update({
       where: { id: userId },
