@@ -51,6 +51,13 @@ export interface IAiAnalysisResult {
   status: GreenActionStatus;
 
   /**
+   * AI-generated insight explaining why the action was rejected,
+   * including specific reasons and suggestions for improvement.
+   * Only present when the score is below the rejection threshold.
+   */
+  rejectionInsight?: string;
+
+  /**
    * Raw AI response text (for debugging)
    */
   rawResponse?: string;

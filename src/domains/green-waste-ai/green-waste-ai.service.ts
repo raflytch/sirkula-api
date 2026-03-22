@@ -84,12 +84,20 @@ IMPORTANT CHECKS:
 - Person actively sorting (if video) or sorted result (if image)
 - Proper labeling or color-coded bins (green for organic, yellow/blue for recyclables, red for hazardous)
 
+REJECTION INSIGHT RULES:
+- If the score is below 40 (image/video does NOT match the criteria at all), you MUST fill "rejectionInsight" with a detailed explanation in Indonesian:
+  1. Why the submission was rejected (what is wrong or missing)
+  2. What was actually detected in the image/video instead
+  3. Specific suggestions on how the user can fix and resubmit
+- If the score is 40 or above, set "rejectionInsight" to null
+
 Respond in this exact JSON format:
 {
   "score": <number 0-100>,
   "labels": ["list", "of", "detected", "objects"],
   "categoryMatch": <true/false>,
   "feedback": "<feedback message in Indonesian for the user>",
+  "rejectionInsight": "<detailed rejection reason and suggestions in Indonesian, or null if score >= 40>",
   "detectedItems": {
     "wasteTypes": ["list of waste types detected"],
     "containers": ["types of containers/bins detected"],
@@ -111,12 +119,20 @@ IMPORTANT CHECKS:
 - Before-after comparison if available (bonus points)
 - Indoor or outdoor green space setup
 
+REJECTION INSIGHT RULES:
+- If the score is below 40 (image/video does NOT match the criteria at all), you MUST fill "rejectionInsight" with a detailed explanation in Indonesian:
+  1. Why the submission was rejected (what is wrong or missing)
+  2. What was actually detected in the image/video instead
+  3. Specific suggestions on how the user can fix and resubmit
+- If the score is 40 or above, set "rejectionInsight" to null
+
 Respond in this exact JSON format:
 {
   "score": <number 0-100>,
   "labels": ["list", "of", "detected", "objects"],
   "categoryMatch": <true/false>,
   "feedback": "<feedback message in Indonesian for the user>",
+  "rejectionInsight": "<detailed rejection reason and suggestions in Indonesian, or null if score >= 40>",
   "detectedItems": {
     "plants": ["types of plants detected"],
     "gardeningItems": ["pots", "soil", "tools", etc.],
@@ -139,12 +155,20 @@ IMPORTANT CHECKS:
 - Reusable bags, containers, or tumblers
 - No single-use plastic visible
 
+REJECTION INSIGHT RULES:
+- If the score is below 40 (image/video does NOT match the criteria at all), you MUST fill "rejectionInsight" with a detailed explanation in Indonesian:
+  1. Why the submission was rejected (what is wrong or missing)
+  2. What was actually detected in the image/video instead
+  3. Specific suggestions on how the user can fix and resubmit
+- If the score is 40 or above, set "rejectionInsight" to null
+
 Respond in this exact JSON format:
 {
   "score": <number 0-100>,
   "labels": ["list", "of", "detected", "objects"],
   "categoryMatch": <true/false>,
   "feedback": "<feedback message in Indonesian for the user>",
+  "rejectionInsight": "<detailed rejection reason and suggestions in Indonesian, or null if score >= 40>",
   "detectedItems": {
     "products": ["organic/eco-friendly products detected"],
     "reusableItems": ["reusable items detected"],
@@ -166,12 +190,20 @@ IMPORTANT CHECKS:
 - Community setting (public spaces, rivers, streets)
 - Signs or banners indicating organized event (bonus)
 
+REJECTION INSIGHT RULES:
+- If the score is below 40 (image/video does NOT match the criteria at all), you MUST fill "rejectionInsight" with a detailed explanation in Indonesian:
+  1. Why the submission was rejected (what is wrong or missing)
+  2. What was actually detected in the image/video instead
+  3. Specific suggestions on how the user can fix and resubmit
+- If the score is 40 or above, set "rejectionInsight" to null
+
 Respond in this exact JSON format:
 {
   "score": <number 0-100>,
   "labels": ["list", "of", "detected", "objects"],
   "categoryMatch": <true/false>,
   "feedback": "<feedback message in Indonesian for the user>",
+  "rejectionInsight": "<detailed rejection reason and suggestions in Indonesian, or null if score >= 40>",
   "detectedItems": {
     "participants": <estimated number or "multiple">,
     "cleanupEvidence": ["collected trash", "cleaning tools", etc.],
@@ -261,6 +293,37 @@ Respond in this exact JSON format:
       dto.category,
       dto.subCategory,
     );
+
+    /**
+     * If AI rejected the action, do not insert into database.
+     * Return an error with the AI feedback so the user can retry with better media.
+     */
+    if (status === GreenActionStatus.REJECTED) {
+      this.logger.warn(
+        `Green action rejected by AI for user ${userId} (score: ${aiResult.score})`,
+      );
+
+      const rejectionInsight =
+        aiResult.rejectionInsight ||
+        (await this.generateRejectionInsight(
+          aiResult,
+          dto.category,
+          dto.subCategory,
+        ));
+
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'Aksi hijau ditolak oleh AI',
+        error: 'Bad Request',
+        details: {
+          aiScore: aiResult.score,
+          aiFeedback: aiResult.feedback,
+          aiLabels: aiResult.labels,
+          rejectionInsight,
+          status: GreenActionStatus.REJECTED,
+        },
+      });
+    }
 
     /**
      * Create green action in database with reverse geocoded location
@@ -542,6 +605,7 @@ Analyze the provided media and respond with the JSON format specified above.`;
         labels: parsed.labels || [],
         categoryMatch: parsed.categoryMatch || false,
         feedback: parsed.feedback || 'Verification completed.',
+        rejectionInsight: parsed.rejectionInsight || null,
         points: 0,
         status: GreenActionStatus.PENDING,
         rawResponse: responseText,
@@ -552,6 +616,57 @@ Analyze the provided media and respond with the JSON format specified above.`;
         'Could not parse verification result. Please try again.',
       );
     }
+  }
+
+  /**
+   * Generate a detailed rejection insight via a second AI call.
+   * Used as fallback when the initial verification response
+   * did not include a rejectionInsight field.
+   */
+  private async generateRejectionInsight(
+    aiResult: IAiAnalysisResult,
+    category: GreenActionCategory,
+    subCategory: string,
+  ): Promise<string> {
+    const prompt = `Kamu adalah asisten AI platform Sirkula yang bertugas menjelaskan mengapa sebuah aksi hijau ditolak.
+
+DATA HASIL VERIFIKASI:
+- Kategori: ${category}
+- Sub-kategori: ${subCategory}
+- Skor AI: ${aiResult.score}/100
+- Label terdeteksi: ${aiResult.labels.length > 0 ? aiResult.labels.join(', ') : 'Tidak ada objek relevan terdeteksi'}
+- Feedback awal: ${aiResult.feedback}
+- Kategori cocok: ${aiResult.categoryMatch ? 'Ya' : 'Tidak'}
+
+TUGAS:
+Buatkan penjelasan penolakan dalam Bahasa Indonesia yang mencakup:
+1. Alasan spesifik mengapa aksi ini ditolak (apa yang kurang atau tidak sesuai)
+2. Apa yang sebenarnya terdeteksi di gambar/video
+3. Saran konkret agar pengguna bisa memperbaiki dan mengirim ulang
+
+ATURAN:
+- Gunakan bahasa yang sopan dan membantu
+- Maksimal 3-4 kalimat, padat dan jelas
+- Jangan gunakan heading, bullet point, atau formatting
+- Langsung ke inti masalah`;
+
+    try {
+      const response = await this.genAiService.generateContent({
+        prompt,
+        generationConfig: {
+          maxOutputTokens: 1500,
+          temperature: 0.4,
+        },
+      });
+
+      if (response.success && response.text) {
+        return response.text.trim();
+      }
+    } catch (error) {
+      this.logger.error('Failed to generate rejection insight', error);
+    }
+
+    return `Aksi hijau Anda pada kategori ${category} (${subCategory}) ditolak karena skor verifikasi terlalu rendah (${aiResult.score}/100). Gambar/video yang diunggah tidak menunjukkan aktivitas yang sesuai dengan kriteria kategori yang dipilih. Silakan unggah ulang dengan media yang lebih jelas menunjukkan aktivitas ${subCategory.toLowerCase().replace(/_/g, ' ')}.`;
   }
 
   /**
@@ -728,7 +843,7 @@ ATURAN:
       const response = await this.genAiService.generateContent({
         prompt,
         generationConfig: {
-          maxOutputTokens: 500,
+          maxOutputTokens: 1500,
           temperature: 0.5,
         },
       });
