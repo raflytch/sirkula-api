@@ -61,6 +61,9 @@ export class GreenWasteAiRepository {
     longitude?: number;
     district?: string;
     city?: string;
+    isFlagged?: boolean;
+    flagReason?: string | null;
+    pointsHeld?: boolean;
   }): Promise<green_action> {
     return this.db.green_action.create({
       data: {
@@ -81,6 +84,9 @@ export class GreenWasteAiRepository {
         longitude: data.longitude,
         district: data.district,
         city: data.city,
+        is_flagged: data.isFlagged ?? false,
+        flag_reason: data.flagReason ?? null,
+        points_held: data.pointsHeld ?? false,
       },
     });
   }
@@ -676,5 +682,216 @@ export class GreenWasteAiRepository {
       totalActions: data.totalActions,
       totalQuantity: Math.round(data.totalQuantity * 100) / 100,
     }));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Anti-cheat validation helpers
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Sum of quantity for a user + sub-category today (UTC day boundaries).
+   */
+  async getUserDailyQuantity(
+    userId: string,
+    subCategory: string,
+  ): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const result = await this.db.green_action.aggregate({
+      where: {
+        user_id: userId,
+        action_type: subCategory,
+        created_at: { gte: startOfDay },
+      },
+      _sum: { quantity: true },
+    });
+
+    return result._sum.quantity ?? 0;
+  }
+
+  /**
+   * Timestamp of user's last action in a specific category.
+   */
+  async getLastActionTime(
+    userId: string,
+    category: string,
+  ): Promise<Date | null> {
+    const last = await this.db.green_action.findFirst({
+      where: { user_id: userId, category },
+      orderBy: { created_at: 'desc' },
+      select: { created_at: true },
+    });
+    return last?.created_at ?? null;
+  }
+
+  /**
+   * Total actions submitted by a user today (across all categories).
+   */
+  async getUserDailyActionCount(userId: string): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    return this.db.green_action.count({
+      where: {
+        user_id: userId,
+        created_at: { gte: startOfDay },
+      },
+    });
+  }
+
+  /**
+   * Average quantity and count for a user + sub-category (for anomaly detection).
+   */
+  async getUserSubCategoryStats(
+    userId: string,
+    subCategory: string,
+  ): Promise<{ count: number; avgQuantity: number }> {
+    const result = await this.db.green_action.aggregate({
+      where: {
+        user_id: userId,
+        action_type: subCategory,
+        status: GreenActionStatus.VERIFIED,
+      },
+      _avg: { quantity: true },
+      _count: { id: true },
+    });
+
+    return {
+      count: result._count.id,
+      avgQuantity: result._avg.quantity ?? 0,
+    };
+  }
+
+  /**
+   * Count of verified actions for a user (for trust promotion).
+   */
+  async getUserVerifiedCount(userId: string): Promise<number> {
+    return this.db.green_action.count({
+      where: {
+        user_id: userId,
+        status: GreenActionStatus.VERIFIED,
+        is_flagged: false,
+      },
+    });
+  }
+
+  /**
+   * Count of recent consecutive non-flagged, verified actions.
+   */
+  async getRecentCleanActionCount(
+    userId: string,
+    limit: number,
+  ): Promise<number> {
+    const recent = await this.db.green_action.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      select: { is_flagged: true, status: true },
+    });
+
+    let clean = 0;
+    for (const action of recent) {
+      if (!action.is_flagged && action.status === GreenActionStatus.VERIFIED) {
+        clean++;
+      } else {
+        break; // streak broken
+      }
+    }
+    return clean;
+  }
+
+  /**
+   * Total flagged actions for a user (for trust demotion).
+   */
+  async getUserFlagCount(userId: string): Promise<number> {
+    return this.db.green_action.count({
+      where: { user_id: userId, is_flagged: true },
+    });
+  }
+
+  /**
+   * Update user trust level.
+   */
+  async updateUserTrustLevel(
+    userId: string,
+    trustLevel: string,
+  ): Promise<void> {
+    await this.db.user.update({
+      where: { id: userId },
+      data: { trust_level: trustLevel },
+    });
+  }
+
+  /**
+   * Get user trust level.
+   */
+  async getUserTrustLevel(userId: string): Promise<string> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: { trust_level: true },
+    });
+    return user?.trust_level ?? 'NEW';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Admin review for flagged actions
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Get all flagged actions pending review.
+   */
+  async findFlaggedActions(): Promise<green_action[]> {
+    return this.db.green_action.findMany({
+      where: { is_flagged: true, reviewed_at: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar_url: true,
+            trust_level: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
+  /**
+   * Approve a flagged action: release held points and mark as reviewed.
+   */
+  async approveFlaggedAction(
+    id: string,
+    reviewerId: string,
+  ): Promise<green_action> {
+    return this.db.green_action.update({
+      where: { id },
+      data: {
+        points_held: false,
+        reviewed_by: reviewerId,
+        reviewed_at: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Reject a flagged action: zero out points, set rejected status, mark reviewed.
+   */
+  async rejectFlaggedAction(
+    id: string,
+    reviewerId: string,
+  ): Promise<green_action> {
+    return this.db.green_action.update({
+      where: { id },
+      data: {
+        status: GreenActionStatus.REJECTED,
+        points: 0,
+        points_held: false,
+        reviewed_by: reviewerId,
+        reviewed_at: new Date(),
+      },
+    });
   }
 }

@@ -10,6 +10,7 @@ import { GreenWasteAiController } from './green-waste-ai.controller';
 import { GreenWasteAiService } from './green-waste-ai.service';
 import { GreenWasteAiReportService } from './green-waste-ai-report.service';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
+import { GreenActionValidatorService } from './green-action-validator.service';
 import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
 
 /**
@@ -35,6 +36,7 @@ import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
     GreenWasteAiService,
     GreenWasteAiReportService,
     GreenWasteAiRepository,
+    GreenActionValidatorService,
   ],
   exports: [GreenWasteAiService],
 })

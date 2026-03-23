@@ -14,6 +14,7 @@ import { GoogleGenAiService } from '../../libs/google-genai/google-gen-ai.servic
 import { CloudinaryService } from '../../libs/cloudinary/cloudinary.service';
 import { GeocodingService } from '../../libs/geocoding/geocoding.service';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
+import { GreenActionValidatorService } from './green-action-validator.service';
 import { CreateGreenActionDto } from './dto/create-green-action.dto';
 import {
   QueryGreenActionDto,
@@ -222,6 +223,7 @@ Respond in this exact JSON format:
    */
   constructor(
     private readonly repository: GreenWasteAiRepository,
+    private readonly validator: GreenActionValidatorService,
     private readonly genAiService: GoogleGenAiService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly geocodingService: GeocodingService,
@@ -240,6 +242,31 @@ Respond in this exact JSON format:
     file: Express.Multer.File,
   ): Promise<IGreenActionResponse> {
     this.logger.log(`Submitting green action for user ${userId}`);
+
+    /**
+     * ── Anti-cheat validation (4 layers) ──
+     * 1. Rule-based limits (max qty, daily cap, cooldown)
+     * 2. Anomaly detection (flags outlier quantities)
+     * 3. Proof already enforced (media + GPS required by DTO)
+     * 4. Trust level applied inside validator
+     */
+    const userTrustLevel = await this.repository.getUserTrustLevel(userId);
+    const validation = await this.validator.validate(
+      userId,
+      dto.category,
+      dto.subCategory,
+      dto.quantity,
+      userTrustLevel,
+    );
+
+    if (validation.rejected) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: validation.message,
+        error: 'Validation Failed',
+        details: { failureType: validation.failureType },
+      });
+    }
 
     /**
      * Validate file type and determine media type
@@ -326,8 +353,10 @@ Respond in this exact JSON format:
     }
 
     /**
-     * Create green action in database with reverse geocoded location
+     * Create green action in database with reverse geocoded location.
+     * If anomaly-flagged: save with points_held = true so admin can review.
      */
+    const isFlagged = validation.flagged;
     const greenAction = await this.repository.create({
       userId,
       category: dto.category,
@@ -346,14 +375,27 @@ Respond in this exact JSON format:
       longitude: dto.longitude,
       district: locationInfo.district,
       city: locationInfo.city,
+      isFlagged,
+      flagReason: validation.flagReason,
+      pointsHeld: isFlagged,
     });
 
     /**
-     * Update user total points if action is verified
+     * Update user total points if action is verified AND not flagged.
+     * Flagged actions hold points until admin approval.
      */
-    if (status === GreenActionStatus.VERIFIED) {
+    if (status === GreenActionStatus.VERIFIED && !isFlagged) {
       await this.repository.updateUserPoints(userId, points);
       this.logger.log(`User ${userId} earned ${points} points`);
+    }
+
+    /**
+     * Trust level management after submission
+     */
+    if (isFlagged) {
+      await this.validator.maybeDemoteTrust(userId, userTrustLevel);
+    } else if (status === GreenActionStatus.VERIFIED) {
+      await this.validator.maybePromoteTrust(userId, userTrustLevel);
     }
 
     return this.mapToResponse(greenAction);
@@ -770,6 +812,11 @@ ATURAN:
       longitude: action.longitude,
       district: action.district,
       city: action.city,
+      isFlagged: action.is_flagged ?? false,
+      flagReason: action.flag_reason ?? null,
+      pointsHeld: action.points_held ?? false,
+      reviewedBy: action.reviewed_by ?? null,
+      reviewedAt: action.reviewed_at ?? null,
       createdAt: action.created_at,
       updatedAt: action.updated_at,
     };
@@ -880,5 +927,73 @@ ATURAN:
     }
 
     return parts.join(' ');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Admin review for flagged actions
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Get all flagged actions pending admin review.
+   */
+  async getFlaggedActions(): Promise<IGreenActionResponse[]> {
+    const actions = await this.repository.findFlaggedActions();
+    return actions.map((a) => this.mapToResponse(a));
+  }
+
+  /**
+   * Admin approves a flagged action: release held points to user.
+   */
+  async approveFlaggedAction(
+    actionId: string,
+    reviewerId: string,
+  ): Promise<IGreenActionResponse> {
+    const action = await this.repository.findById(actionId);
+    if (!action) throw new NotFoundException('Green action not found');
+    if (!action.is_flagged)
+      throw new BadRequestException('Action is not flagged');
+
+    const updated = await this.repository.approveFlaggedAction(
+      actionId,
+      reviewerId,
+    );
+
+    // Release held points
+    if (
+      action.status === GreenActionStatus.VERIFIED &&
+      action.points > 0 &&
+      action.points_held
+    ) {
+      await this.repository.updateUserPoints(action.user_id, action.points);
+      this.logger.log(
+        `Released ${action.points} held points for user ${action.user_id}`,
+      );
+    }
+
+    return this.mapToResponse(updated);
+  }
+
+  /**
+   * Admin rejects a flagged action: zero out points, demote trust.
+   */
+  async rejectFlaggedAction(
+    actionId: string,
+    reviewerId: string,
+  ): Promise<IGreenActionResponse> {
+    const action = await this.repository.findById(actionId);
+    if (!action) throw new NotFoundException('Green action not found');
+    if (!action.is_flagged)
+      throw new BadRequestException('Action is not flagged');
+
+    const updated = await this.repository.rejectFlaggedAction(
+      actionId,
+      reviewerId,
+    );
+
+    // Demote trust after admin-confirmed rejection
+    const trustLevel = await this.repository.getUserTrustLevel(action.user_id);
+    await this.validator.maybeDemoteTrust(action.user_id, trustLevel);
+
+    return this.mapToResponse(updated);
   }
 }

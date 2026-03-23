@@ -47,6 +47,12 @@ model user {
   total_points Int     @default(0)
   is_active    Boolean @default(true)
 
+  /**
+   * Trust level for anti-cheat validation
+   * NEW = fresh user (stricter limits), TRUSTED = proven user, FLAGGED = suspected cheater
+   */
+  trust_level String @default("NEW")
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -125,7 +131,7 @@ model green_action {
   /**
    * Quantitative data for impact measurement
    */
-  quantity    Float    @default(0)
+  quantity    Float   @default(0)
   action_type String?
 
   /**
@@ -156,6 +162,20 @@ model green_action {
    */
   points Int @default(0)
 
+  /**
+   * Anti-cheat flagging fields
+   * is_flagged: action flagged for admin review (anomaly detected)
+   * flag_reason: why the action was flagged
+   * points_held: true if points are withheld pending review
+   * reviewed_by: admin user ID who reviewed the flagged action
+   * reviewed_at: when the review happened
+   */
+  is_flagged  Boolean   @default(false)
+  flag_reason String?
+  points_held Boolean   @default(false)
+  reviewed_by String?
+  reviewed_at DateTime?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -167,6 +187,7 @@ model green_action {
   @@index([created_at])
   @@index([district])
   @@index([city])
+  @@index([is_flagged])
 }
 
 /**
@@ -242,9 +263,9 @@ model voucher_claim {
  * Sessions are consumed once the user submits answers.
  */
 model quiz_session {
-  id         String  @id @default(uuid())
-  user_id    String
-  user       user    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  user_id String
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   /**
    * JSON array of { questionNumber, correctAnswer } objects.
@@ -266,9 +287,9 @@ model quiz_session {
  * @description Stores quiz results and earned points from green action education quizzes
  */
 model quiz_history {
-  id              String @id @default(uuid())
-  user_id         String
-  user            user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  user_id String
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   score           Int
   total_questions Int

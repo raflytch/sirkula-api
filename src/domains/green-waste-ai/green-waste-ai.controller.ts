@@ -782,6 +782,110 @@ export class GreenWasteAiController {
   }
 
   /**
+   * Get all flagged actions pending admin review
+   */
+  @Get('flagged')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get flagged green actions for review',
+    description:
+      'Get all green actions that were flagged by the anti-cheat system, pending admin review. Admin/DLH only.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Flagged actions retrieved successfully',
+  })
+  async getFlaggedActions() {
+    const result = await this.greenWasteAiService.getFlaggedActions();
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Flagged actions retrieved successfully',
+      total: result.length,
+      data: result,
+    };
+  }
+
+  /**
+   * Approve a flagged action — release held points to user
+   */
+  @Post('flagged/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Approve a flagged green action',
+    description:
+      'Approve a flagged green action and release held points to the user. Admin/DLH only.',
+  })
+  @ApiParam({ name: 'id', description: 'Green action UUID', type: String })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Action approved and points released',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Green action not found',
+  })
+  async approveFlaggedAction(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.greenWasteAiService.approveFlaggedAction(
+      id,
+      user.sub,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Flagged action approved, points released',
+      data: result,
+    };
+  }
+
+  /**
+   * Reject a flagged action — zero out points, demote trust
+   */
+  @Post('flagged/:id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'DLH')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reject a flagged green action',
+    description:
+      'Reject a flagged green action, zero out points, and potentially downgrade user trust level. Admin/DLH only.',
+  })
+  @ApiParam({ name: 'id', description: 'Green action UUID', type: String })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Action rejected, points removed',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Green action not found',
+  })
+  async rejectFlaggedAction(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.greenWasteAiService.rejectFlaggedAction(
+      id,
+      user.sub,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Flagged action rejected',
+      data: result,
+    };
+  }
+
+  /**
    * Get a single green action by ID
    * @param {JwtPayload} user - Current authenticated user
    * @param {string} id - Green action ID

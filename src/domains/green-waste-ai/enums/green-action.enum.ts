@@ -149,3 +149,31 @@ export enum GreenActionMediaType {
    */
   VIDEO = 'VIDEO',
 }
+
+/**
+ * User trust level for anti-cheat system
+ */
+export enum TrustLevel {
+  /** New user — tighter submission limits */
+  NEW = 'NEW',
+  /** Proven user — standard limits */
+  TRUSTED = 'TRUSTED',
+  /** Suspected cheater — strictest limits, under watch */
+  FLAGGED = 'FLAGGED',
+}
+
+/**
+ * Validation failure type returned by the validator
+ */
+export enum ValidationFailureType {
+  /** Hard-rejected: quantity exceeds absolute max */
+  QUANTITY_EXCEEDED = 'QUANTITY_EXCEEDED',
+  /** Hard-rejected: daily quota used up */
+  DAILY_LIMIT_EXCEEDED = 'DAILY_LIMIT_EXCEEDED',
+  /** Hard-rejected: submitted too soon after last action */
+  COOLDOWN_ACTIVE = 'COOLDOWN_ACTIVE',
+  /** Hard-rejected: too many actions today */
+  GLOBAL_DAILY_CAP = 'GLOBAL_DAILY_CAP',
+  /** Soft-flagged: anomalous quantity, needs admin review */
+  ANOMALY_FLAGGED = 'ANOMALY_FLAGGED',
+}

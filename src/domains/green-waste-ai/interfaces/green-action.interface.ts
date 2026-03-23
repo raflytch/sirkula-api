@@ -200,6 +200,15 @@ export interface IGreenActionResponse {
   city?: string | null;
 
   /**
+   * Anti-cheat flagging info
+   */
+  isFlagged: boolean;
+  flagReason?: string | null;
+  pointsHeld: boolean;
+  reviewedBy?: string | null;
+  reviewedAt?: Date | null;
+
+  /**
    * Creation timestamp
    */
   createdAt: Date;
