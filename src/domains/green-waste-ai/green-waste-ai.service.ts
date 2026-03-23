@@ -952,13 +952,14 @@ ATURAN:
     if (!action) throw new NotFoundException('Green action not found');
     if (!action.is_flagged)
       throw new BadRequestException('Action is not flagged');
+    if (action.reviewed_at)
+      throw new BadRequestException('Action has already been reviewed');
 
     const updated = await this.repository.approveFlaggedAction(
       actionId,
       reviewerId,
     );
 
-    // Release held points
     if (
       action.status === GreenActionStatus.VERIFIED &&
       action.points > 0 &&
@@ -984,13 +985,14 @@ ATURAN:
     if (!action) throw new NotFoundException('Green action not found');
     if (!action.is_flagged)
       throw new BadRequestException('Action is not flagged');
+    if (action.reviewed_at)
+      throw new BadRequestException('Action has already been reviewed');
 
     const updated = await this.repository.rejectFlaggedAction(
       actionId,
       reviewerId,
     );
 
-    // Demote trust after admin-confirmed rejection
     const trustLevel = await this.repository.getUserTrustLevel(action.user_id);
     await this.validator.maybeDemoteTrust(action.user_id, trustLevel);
 

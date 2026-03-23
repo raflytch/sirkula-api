@@ -792,11 +792,146 @@ export class GreenWasteAiController {
   @ApiOperation({
     summary: 'Get flagged green actions for review',
     description:
-      'Get all green actions that were flagged by the anti-cheat system, pending admin review. Admin/DLH only.',
+      'Get all green actions that were flagged by the anti-cheat system, pending admin review (reviewed_at is null). Admin/DLH only.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Flagged actions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: {
+          type: 'string',
+          example: 'Flagged actions retrieved successfully',
+        },
+        total: { type: 'number', example: 3 },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string',
+                format: 'uuid',
+                example: '550e8400-e29b-41d4-a716-446655440000',
+              },
+              userId: { type: 'string', format: 'uuid' },
+              user: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  name: { type: 'string', example: 'Budi Santoso' },
+                  email: {
+                    type: 'string',
+                    example: 'budi@example.com',
+                  },
+                  avatarUrl: {
+                    type: 'string',
+                    nullable: true,
+                    example: 'https://res.cloudinary.com/...',
+                  },
+                },
+              },
+              category: {
+                type: 'string',
+                example: 'PILAH_SAMPAH',
+                enum: [
+                  'PILAH_SAMPAH',
+                  'TANAM_POHON',
+                  'KONSUMSI_HIJAU',
+                  'AKSI_KOLEKTIF',
+                ],
+              },
+              description: {
+                type: 'string',
+                nullable: true,
+                example: 'Memilah sampah organik di rumah',
+              },
+              quantity: { type: 'number', example: 50 },
+              actionType: {
+                type: 'string',
+                nullable: true,
+                example: 'kg',
+              },
+              mediaUrl: {
+                type: 'string',
+                example: 'https://res.cloudinary.com/...',
+              },
+              mediaType: {
+                type: 'string',
+                example: 'IMAGE',
+                enum: ['IMAGE', 'VIDEO'],
+              },
+              status: {
+                type: 'string',
+                example: 'VERIFIED',
+                enum: ['PENDING', 'VERIFIED', 'REJECTED', 'NEEDS_IMPROVEMENT'],
+              },
+              aiScore: { type: 'number', nullable: true, example: 82 },
+              aiFeedback: {
+                type: 'string',
+                nullable: true,
+                example: 'Terdeteksi aktivitas pilah sampah yang baik.',
+              },
+              aiLabels: {
+                type: 'string',
+                nullable: true,
+                example: '["trash_organic","bin_green"]',
+              },
+              points: { type: 'number', example: 50 },
+              locationName: {
+                type: 'string',
+                nullable: true,
+                example: 'Perumahan Green Ville',
+              },
+              latitude: { type: 'number', nullable: true, example: -6.2 },
+              longitude: {
+                type: 'number',
+                nullable: true,
+                example: 106.816,
+              },
+              district: {
+                type: 'string',
+                nullable: true,
+                example: 'Menteng',
+              },
+              city: {
+                type: 'string',
+                nullable: true,
+                example: 'Jakarta Pusat',
+              },
+              isFlagged: { type: 'boolean', example: true },
+              flagReason: {
+                type: 'string',
+                nullable: true,
+                example:
+                  'Anomaly: quantity 50 melebihi 3x rata-rata user (5.2)',
+              },
+              pointsHeld: { type: 'boolean', example: true },
+              reviewedBy: { type: 'string', nullable: true, example: null },
+              reviewedAt: {
+                type: 'string',
+                format: 'date-time',
+                nullable: true,
+                example: null,
+              },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Not authenticated',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Access denied - Admin/DLH only',
   })
   async getFlaggedActions() {
     const result = await this.greenWasteAiService.getFlaggedActions();
@@ -820,16 +955,136 @@ export class GreenWasteAiController {
   @ApiOperation({
     summary: 'Approve a flagged green action',
     description:
-      'Approve a flagged green action and release held points to the user. Admin/DLH only.',
+      'Approve a flagged green action and release held points to the user. Only works on actions where is_flagged=true. Admin/DLH only.',
   })
-  @ApiParam({ name: 'id', description: 'Green action UUID', type: String })
+  @ApiParam({
+    name: 'id',
+    description: 'Green action UUID',
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Action approved and points released',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: {
+          type: 'string',
+          example: 'Flagged action approved, points released',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            userId: { type: 'string', format: 'uuid' },
+            category: { type: 'string', example: 'PILAH_SAMPAH' },
+            description: {
+              type: 'string',
+              nullable: true,
+              example: 'Memilah sampah organik',
+            },
+            quantity: { type: 'number', example: 5.5 },
+            actionType: {
+              type: 'string',
+              nullable: true,
+              example: 'kg',
+            },
+            mediaUrl: {
+              type: 'string',
+              example: 'https://res.cloudinary.com/...',
+            },
+            mediaType: { type: 'string', example: 'IMAGE' },
+            status: { type: 'string', example: 'VERIFIED' },
+            aiScore: { type: 'number', nullable: true, example: 85 },
+            aiFeedback: {
+              type: 'string',
+              nullable: true,
+              example: 'Aktivitas pilah sampah terdeteksi dengan baik.',
+            },
+            aiLabels: {
+              type: 'string',
+              nullable: true,
+              example: '["trash_organic","bin_green"]',
+            },
+            points: { type: 'number', example: 50 },
+            locationName: {
+              type: 'string',
+              nullable: true,
+              example: 'Taman Menteng',
+            },
+            latitude: { type: 'number', nullable: true, example: -6.2 },
+            longitude: {
+              type: 'number',
+              nullable: true,
+              example: 106.816,
+            },
+            district: {
+              type: 'string',
+              nullable: true,
+              example: 'Menteng',
+            },
+            city: {
+              type: 'string',
+              nullable: true,
+              example: 'Jakarta Pusat',
+            },
+            isFlagged: { type: 'boolean', example: true },
+            flagReason: {
+              type: 'string',
+              nullable: true,
+              example: 'Anomaly: quantity melebihi 3x rata-rata',
+            },
+            pointsHeld: { type: 'boolean', example: false },
+            reviewedBy: {
+              type: 'string',
+              format: 'uuid',
+              example: 'admin-uuid-here',
+            },
+            reviewedAt: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-03-23T10:30:00.000Z',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Action is not flagged',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: 'Action is not flagged' },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Not authenticated',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Access denied - Admin/DLH only',
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Green action not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Green action not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
   })
   async approveFlaggedAction(
     @CurrentUser() user: JwtPayload,
@@ -858,16 +1113,133 @@ export class GreenWasteAiController {
   @ApiOperation({
     summary: 'Reject a flagged green action',
     description:
-      'Reject a flagged green action, zero out points, and potentially downgrade user trust level. Admin/DLH only.',
+      'Reject a flagged green action, zero out points, set status to REJECTED, and potentially downgrade user trust level. Only works on actions where is_flagged=true. Admin/DLH only.',
   })
-  @ApiParam({ name: 'id', description: 'Green action UUID', type: String })
+  @ApiParam({
+    name: 'id',
+    description: 'Green action UUID',
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Action rejected, points removed',
+    description: 'Action rejected, points removed, trust potentially demoted',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Flagged action rejected' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            userId: { type: 'string', format: 'uuid' },
+            category: { type: 'string', example: 'PILAH_SAMPAH' },
+            description: {
+              type: 'string',
+              nullable: true,
+              example: 'Memilah sampah organik',
+            },
+            quantity: { type: 'number', example: 50 },
+            actionType: {
+              type: 'string',
+              nullable: true,
+              example: 'kg',
+            },
+            mediaUrl: {
+              type: 'string',
+              example: 'https://res.cloudinary.com/...',
+            },
+            mediaType: { type: 'string', example: 'IMAGE' },
+            status: { type: 'string', example: 'REJECTED' },
+            aiScore: { type: 'number', nullable: true, example: 82 },
+            aiFeedback: {
+              type: 'string',
+              nullable: true,
+              example: 'Terdeteksi aktivitas pilah sampah.',
+            },
+            aiLabels: {
+              type: 'string',
+              nullable: true,
+              example: '["trash_organic"]',
+            },
+            points: { type: 'number', example: 0 },
+            locationName: {
+              type: 'string',
+              nullable: true,
+              example: 'Taman Menteng',
+            },
+            latitude: { type: 'number', nullable: true, example: -6.2 },
+            longitude: {
+              type: 'number',
+              nullable: true,
+              example: 106.816,
+            },
+            district: {
+              type: 'string',
+              nullable: true,
+              example: 'Menteng',
+            },
+            city: {
+              type: 'string',
+              nullable: true,
+              example: 'Jakarta Pusat',
+            },
+            isFlagged: { type: 'boolean', example: true },
+            flagReason: {
+              type: 'string',
+              nullable: true,
+              example: 'Anomaly: quantity 50 melebihi 3x rata-rata user',
+            },
+            pointsHeld: { type: 'boolean', example: false },
+            reviewedBy: {
+              type: 'string',
+              format: 'uuid',
+              example: 'admin-uuid-here',
+            },
+            reviewedAt: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-03-23T10:30:00.000Z',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Action is not flagged',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: 'Action is not flagged' },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Not authenticated',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Access denied - Admin/DLH only',
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Green action not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Green action not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
   })
   async rejectFlaggedAction(
     @CurrentUser() user: JwtPayload,

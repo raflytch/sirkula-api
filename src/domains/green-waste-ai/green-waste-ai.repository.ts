@@ -873,6 +873,16 @@ export class GreenWasteAiRepository {
         reviewed_by: reviewerId,
         reviewed_at: new Date(),
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar_url: true,
+          },
+        },
+      },
     });
   }
 
@@ -891,6 +901,16 @@ export class GreenWasteAiRepository {
         points_held: false,
         reviewed_by: reviewerId,
         reviewed_at: new Date(),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar_url: true,
+          },
+        },
       },
     });
   }
