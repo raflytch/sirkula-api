@@ -91,6 +91,7 @@ REJECTION INSIGHT RULES:
   2. What was actually detected in the image/video instead
   3. Specific suggestions on how the user can fix and resubmit
 - If the score is 40 or above, set "rejectionInsight" to null
+- IMPORTANT: In "feedback" and "rejectionInsight", NEVER use underscores in category/sub-category names. Use human-readable names like "Pilah Sampah Organik", "Sampah Anorganik", "Sampah B3", etc.
 
 Respond in this exact JSON format:
 {
@@ -126,6 +127,7 @@ REJECTION INSIGHT RULES:
   2. What was actually detected in the image/video instead
   3. Specific suggestions on how the user can fix and resubmit
 - If the score is 40 or above, set "rejectionInsight" to null
+- IMPORTANT: In "feedback" and "rejectionInsight", NEVER use underscores in category/sub-category names. Use human-readable names like "Tanam Pohon Baru", "Urban Farming", "Green Corner", etc.
 
 Respond in this exact JSON format:
 {
@@ -162,6 +164,7 @@ REJECTION INSIGHT RULES:
   2. What was actually detected in the image/video instead
   3. Specific suggestions on how the user can fix and resubmit
 - If the score is 40 or above, set "rejectionInsight" to null
+- IMPORTANT: In "feedback" and "rejectionInsight", NEVER use underscores in category/sub-category names. Use human-readable names like "Produk Organik", "Refill Station", "Barang Reusable", etc.
 
 Respond in this exact JSON format:
 {
@@ -197,6 +200,7 @@ REJECTION INSIGHT RULES:
   2. What was actually detected in the image/video instead
   3. Specific suggestions on how the user can fix and resubmit
 - If the score is 40 or above, set "rejectionInsight" to null
+- IMPORTANT: In "feedback" and "rejectionInsight", NEVER use underscores in category/sub-category names. Use human-readable names like "Kerja Bakti", "Bersih Sungai", etc.
 
 Respond in this exact JSON format:
 {
@@ -221,6 +225,27 @@ Respond in this exact JSON format:
    * @param {CloudinaryService} cloudinaryService - Cloudinary upload service
    * @param {GeocodingService} geocodingService - Geocoding service for reverse geocoding
    */
+  /**
+   * Human-readable labels for categories and sub-categories
+   */
+  private readonly CATEGORY_LABELS: Record<string, string> = {
+    PILAH_SAMPAH: 'Pilah & Olah Sampah',
+    TANAM_POHON: 'Tanam Pohon & Area Hijau',
+    KONSUMSI_HIJAU: 'Konsumsi Hijau',
+    AKSI_KOLEKTIF: 'Aksi Kolektif',
+    SAMPAH_ORGANIK: 'Sampah Organik',
+    SAMPAH_ANORGANIK: 'Sampah Anorganik',
+    SAMPAH_B3: 'Sampah B3 (Berbahaya)',
+    TANAM_POHON_BARU: 'Tanam Pohon Baru',
+    URBAN_FARMING: 'Urban Farming',
+    GREEN_CORNER: 'Green Corner',
+    PRODUK_ORGANIK: 'Produk Organik',
+    REFILL_STATION: 'Refill Station',
+    BARANG_REUSABLE: 'Barang Reusable',
+    KERJA_BAKTI: 'Kerja Bakti',
+    BERSIH_SUNGAI: 'Bersih Sungai',
+  };
+
   constructor(
     private readonly repository: GreenWasteAiRepository,
     private readonly validator: GreenActionValidatorService,
@@ -228,6 +253,33 @@ Respond in this exact JSON format:
     private readonly cloudinaryService: CloudinaryService,
     private readonly geocodingService: GeocodingService,
   ) {}
+
+  /**
+   * Convert an enum key (e.g. PILAH_SAMPAH) to a user-friendly label.
+   * Falls back to replacing underscores with spaces and title-casing.
+   */
+  private formatLabel(enumKey: string): string {
+    if (this.CATEGORY_LABELS[enumKey]) {
+      return this.CATEGORY_LABELS[enumKey];
+    }
+    return enumKey
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  /**
+   * Replace any leftover UPPER_CASE enum tokens in AI-generated
+   * user-facing text with their readable labels.
+   */
+  private sanitizeUserText(text: string): string {
+    if (!text) return text;
+    const pattern = /\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b/g;
+    return text.replace(pattern, (match) => {
+      const label = this.CATEGORY_LABELS[match];
+      return label ?? match.toLowerCase().replace(/_/g, ' ');
+    });
+  }
 
   /**
    * Submit a new green action with media for AI verification
@@ -575,10 +627,13 @@ Respond in this exact JSON format:
        * Build the prompt with category-specific instructions
        */
       const basePrompt = this.AI_PROMPTS[category];
+      const subCategoryLabel = this.formatLabel(subCategory);
       const fullPrompt = `${basePrompt}
 
-SUB-CATEGORY: ${subCategory}
+SUB-CATEGORY: ${subCategoryLabel}
 ${description ? `USER DESCRIPTION: ${description}` : ''}
+
+IMPORTANT: When writing feedback or rejectionInsight, always refer to categories and sub-categories using their human-readable names (e.g. "Pilah Sampah Organik" instead of "SAMPAH_ORGANIK"). Never use underscores in user-facing text.
 
 Analyze the provided media and respond with the JSON format specified above.`;
 
@@ -646,8 +701,11 @@ Analyze the provided media and respond with the JSON format specified above.`;
         score: Math.min(100, Math.max(0, parsed.score || 0)),
         labels: parsed.labels || [],
         categoryMatch: parsed.categoryMatch || false,
-        feedback: parsed.feedback || 'Verification completed.',
-        rejectionInsight: parsed.rejectionInsight || null,
+        feedback:
+          this.sanitizeUserText(parsed.feedback) || 'Verification completed.',
+        rejectionInsight: parsed.rejectionInsight
+          ? this.sanitizeUserText(parsed.rejectionInsight)
+          : undefined,
         points: 0,
         status: GreenActionStatus.PENDING,
         rawResponse: responseText,
@@ -670,11 +728,14 @@ Analyze the provided media and respond with the JSON format specified above.`;
     category: GreenActionCategory,
     subCategory: string,
   ): Promise<string> {
+    const categoryLabel = this.formatLabel(category);
+    const subCategoryLabel = this.formatLabel(subCategory);
+
     const prompt = `Kamu adalah asisten AI platform Sirkula yang bertugas menjelaskan mengapa sebuah aksi hijau ditolak.
 
 DATA HASIL VERIFIKASI:
-- Kategori: ${category}
-- Sub-kategori: ${subCategory}
+- Kategori: ${categoryLabel}
+- Sub-kategori: ${subCategoryLabel}
 - Skor AI: ${aiResult.score}/100
 - Label terdeteksi: ${aiResult.labels.length > 0 ? aiResult.labels.join(', ') : 'Tidak ada objek relevan terdeteksi'}
 - Feedback awal: ${aiResult.feedback}
@@ -690,7 +751,8 @@ ATURAN:
 - Gunakan bahasa yang sopan dan membantu
 - Maksimal 3-4 kalimat, padat dan jelas
 - Jangan gunakan heading, bullet point, atau formatting
-- Langsung ke inti masalah`;
+- Langsung ke inti masalah
+- JANGAN gunakan garis bawah (underscore) pada nama kategori atau sub-kategori. Gunakan nama yang mudah dibaca seperti "${categoryLabel}" dan "${subCategoryLabel}"`;
 
     try {
       const response = await this.genAiService.generateContent({
@@ -707,7 +769,7 @@ ATURAN:
       this.logger.error('Failed to generate rejection insight', error);
     }
 
-    return `Aksi hijau Anda pada kategori ${category} (${subCategory}) ditolak karena skor verifikasi terlalu rendah (${aiResult.score}/100). Gambar/video yang diunggah tidak menunjukkan aktivitas yang sesuai dengan kriteria kategori yang dipilih. Silakan unggah ulang dengan media yang lebih jelas menunjukkan aktivitas ${subCategory.toLowerCase().replace(/_/g, ' ')}.`;
+    return `Aksi hijau Anda pada kategori ${categoryLabel} (${subCategoryLabel}) ditolak karena skor verifikasi terlalu rendah (${aiResult.score}/100). Gambar/video yang diunggah tidak menunjukkan aktivitas yang sesuai dengan kriteria kategori yang dipilih. Silakan unggah ulang dengan media yang lebih jelas menunjukkan aktivitas ${subCategoryLabel}.`;
   }
 
   /**
