@@ -274,7 +274,7 @@ export class UserController {
         avatar: {
           type: 'string',
           format: 'binary',
-          description: 'Avatar image file (JPEG, PNG, GIF, WebP, max 1MB)',,
+          description: 'Avatar image file (JPEG, PNG, GIF, WebP, max 1MB)',
         },
       },
     },
