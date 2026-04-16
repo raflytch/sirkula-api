@@ -6,12 +6,20 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './commons/interceptors/response.interceptor';
 import { AppConfigService } from './config/config.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  /**
+   * Increase body parser limits for chunked uploads.
+   * Each chunk is ~1MB raw → ~1.37MB base64-encoded JSON.
+   */
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ extended: true, limit: '2mb' }));
 
   /**
    * Enable CORS for all origins
