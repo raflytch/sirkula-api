@@ -10,6 +10,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -120,6 +121,18 @@ export class CreateGreenActionDto {
   @Min(-180, { message: 'Longitude must be between -180 and 180' })
   @Max(180, { message: 'Longitude must be between -180 and 180' })
   longitude: number;
+
+  /**
+   * Upload ID from chunked upload session (alternative to direct file upload).
+   * Use this when the file is larger than 1.5MB and was uploaded via chunked upload endpoints.
+   */
+  @ApiPropertyOptional({
+    description: 'Upload ID dari chunked upload (gunakan jika file > 1.5MB)',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'mediaUploadId must be a valid UUID' })
+  mediaUploadId?: string;
 }
 
 /**

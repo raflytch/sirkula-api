@@ -5,3 +5,4 @@
 
 export * from './create-green-action.dto';
 export * from './query-green-action.dto';
+export * from './chunked-upload.dto';

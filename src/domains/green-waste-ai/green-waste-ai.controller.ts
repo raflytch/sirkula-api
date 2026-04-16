@@ -4,6 +4,7 @@
  */
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -40,7 +41,9 @@ import { CurrentUser } from '../../commons/decorators/current-user.decorator';
 import { JwtPayload } from '../../commons/strategies/jwt.strategy';
 import { GreenWasteAiService } from './green-waste-ai.service';
 import { GreenWasteAiReportService } from './green-waste-ai-report.service';
+import { ChunkedUploadService } from './chunked-upload.service';
 import { CreateGreenActionDto } from './dto/create-green-action.dto';
+import { InitChunkedUploadDto, UploadChunkDto } from './dto/chunked-upload.dto';
 import {
   QueryGreenActionDto,
   AdminQueryGreenActionDto,
@@ -60,6 +63,7 @@ export class GreenWasteAiController {
   constructor(
     private readonly greenWasteAiService: GreenWasteAiService,
     private readonly reportService: GreenWasteAiReportService,
+    private readonly chunkedUploadService: ChunkedUploadService,
   ) {}
 
   /**
@@ -197,6 +201,115 @@ export class GreenWasteAiController {
   }
 
   /**
+   * Initialize a chunked upload session
+   * @param {JwtPayload} user - Current authenticated user
+   * @param {InitChunkedUploadDto} dto - Upload metadata
+   * @returns Upload session ID
+   */
+  @Post('upload/init')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Initialize chunked upload',
+    description:
+      'Start a chunked upload session for files up to 10MB. Returns an uploadId used to send chunks.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Upload session created',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: {
+          type: 'string',
+          example: 'Upload session created',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            uploadId: {
+              type: 'string',
+              example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            },
+          },
+        },
+      },
+    },
+  })
+  async initChunkedUpload(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: InitChunkedUploadDto,
+  ) {
+    const result = this.chunkedUploadService.initUpload(
+      user.sub,
+      dto.fileName,
+      dto.mimeType,
+      dto.totalSize,
+      dto.totalChunks,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Upload session created',
+      data: result,
+    };
+  }
+
+  /**
+   * Upload a single chunk to an existing session
+   * @param {JwtPayload} user - Current authenticated user
+   * @param {UploadChunkDto} dto - Chunk data with session reference
+   * @returns Upload progress status
+   */
+  @Post('upload/chunk')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Upload a file chunk',
+    description:
+      'Send a base64-encoded chunk (max ~1MB raw). Send chunks sequentially or in parallel.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Chunk received',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Chunk 1/5 received' },
+        data: {
+          type: 'object',
+          properties: {
+            receivedChunks: { type: 'number', example: 1 },
+            totalChunks: { type: 'number', example: 5 },
+            complete: { type: 'boolean', example: false },
+          },
+        },
+      },
+    },
+  })
+  async uploadChunk(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UploadChunkDto,
+  ) {
+    const result = this.chunkedUploadService.addChunk(
+      dto.uploadId,
+      user.sub,
+      dto.chunkIndex,
+      dto.data,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: `Chunk ${result.receivedChunks}/${result.totalChunks} received`,
+      data: result,
+    };
+  }
+
+  /**
    * Submit a new green action with media
    * @param {JwtPayload} user - Current authenticated user
    * @param {CreateGreenActionDto} dto - Green action data
@@ -278,7 +391,14 @@ export class GreenWasteAiController {
         media: {
           type: 'string',
           format: 'binary',
-          description: 'Image or video file (max 1MB)',
+          description:
+            'Image or video file (max 1.5MB direct upload). For larger files up to 10MB, use chunked upload.',
+        },
+        mediaUploadId: {
+          type: 'string',
+          description:
+            'Upload ID from chunked upload (alternative to media file)',
+          example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         },
       },
     },
@@ -347,18 +467,49 @@ export class GreenWasteAiController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({
-            maxSize: 1 * 1024 * 1024,
-            message: 'File size must not exceed 1MB',
+            maxSize: 1.5 * 1024 * 1024,
+            message:
+              'Direct upload file size must not exceed 1.5MB. Use chunked upload for larger files.',
           }),
         ],
+        fileIsRequired: false,
       }),
     )
-    file: Express.Multer.File,
+    file?: Express.Multer.File,
   ) {
+    let actualFile: Express.Multer.File;
+
+    if (file) {
+      // Direct upload (small file <= 1.5MB)
+      actualFile = file;
+    } else if (dto.mediaUploadId) {
+      // Chunked upload — reassemble from session
+      const assembled = this.chunkedUploadService.getCompletedUpload(
+        dto.mediaUploadId,
+        user.sub,
+      );
+      actualFile = {
+        buffer: assembled.buffer,
+        originalname: assembled.originalname,
+        mimetype: assembled.mimetype,
+        size: assembled.size,
+        fieldname: 'media',
+        encoding: '7bit',
+        stream: null as any,
+        destination: '',
+        filename: assembled.originalname,
+        path: '',
+      };
+    } else {
+      throw new BadRequestException(
+        'Either a media file or mediaUploadId (from chunked upload) is required',
+      );
+    }
+
     const result = await this.greenWasteAiService.submitAction(
       user.sub,
       dto,
-      file,
+      actualFile,
     );
 
     return {

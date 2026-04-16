@@ -11,6 +11,7 @@ import { GreenWasteAiService } from './green-waste-ai.service';
 import { GreenWasteAiReportService } from './green-waste-ai-report.service';
 import { GreenWasteAiRepository } from './green-waste-ai.repository';
 import { GreenActionValidatorService } from './green-action-validator.service';
+import { ChunkedUploadService } from './chunked-upload.service';
 import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
 
 /**
@@ -37,6 +38,7 @@ import { GeocodingModule } from '../../libs/geocoding/geocoding.module';
     GreenWasteAiReportService,
     GreenWasteAiRepository,
     GreenActionValidatorService,
+    ChunkedUploadService,
   ],
   exports: [GreenWasteAiService],
 })
