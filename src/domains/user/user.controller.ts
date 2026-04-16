@@ -17,6 +17,8 @@ import {
   UploadedFile,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
+  ParseFilePipe,
   Req,
   Res,
 } from '@nestjs/common';
@@ -272,7 +274,7 @@ export class UserController {
         avatar: {
           type: 'string',
           format: 'binary',
-          description: 'Avatar image file (JPEG, PNG, GIF, WebP, max 5MB)',
+          description: 'Avatar image file (JPEG, PNG, GIF, WebP, max 1MB)',,
         },
       },
     },
@@ -283,7 +285,18 @@ export class UserController {
   async updateProfile(
     @CurrentUser() user: IJwtPayload,
     @Body() dto: UpdateProfileDto,
-    @UploadedFile() avatar?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1 * 1024 * 1024,
+            message: 'File size must not exceed 1MB',
+          }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    avatar?: Express.Multer.File,
   ): Promise<ISafeUser> {
     return this.userService.updateProfile(user.sub, dto, avatar);
   }
@@ -331,7 +344,7 @@ export class UserController {
         logo: {
           type: 'string',
           format: 'binary',
-          description: 'UMKM logo image file (JPEG, PNG, GIF, WebP, max 5MB)',
+          description: 'UMKM logo image file (JPEG, PNG, GIF, WebP, max 1MB)',
         },
       },
     },
@@ -348,7 +361,18 @@ export class UserController {
   async updateUmkmProfile(
     @CurrentUser() user: IJwtPayload,
     @Body() dto: UpdateUmkmProfileDto,
-    @UploadedFile() logo?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1 * 1024 * 1024,
+            message: 'File size must not exceed 1MB',
+          }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    logo?: Express.Multer.File,
   ): Promise<ISafeUser> {
     return this.userService.updateUmkmProfile(user.sub, dto, logo);
   }

@@ -10,7 +10,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   ParseUUIDPipe,
   Post,
   Query,
@@ -276,8 +278,7 @@ export class GreenWasteAiController {
         media: {
           type: 'string',
           format: 'binary',
-          description:
-            'Image or video file (max 10MB for images, 100MB for videos)',
+          description: 'Image or video file (max 1MB)',
         },
       },
     },
@@ -342,7 +343,17 @@ export class GreenWasteAiController {
   async submitAction(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateGreenActionDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1 * 1024 * 1024,
+            message: 'File size must not exceed 1MB',
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
   ) {
     const result = await this.greenWasteAiService.submitAction(
       user.sub,

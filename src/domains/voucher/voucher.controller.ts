@@ -10,7 +10,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -154,7 +156,18 @@ export class VoucherController {
   async createVoucher(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateVoucherDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1 * 1024 * 1024,
+            message: 'File size must not exceed 1MB',
+          }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     const voucher = await this.voucherService.createVoucher(
       user.sub,
@@ -322,7 +335,18 @@ export class VoucherController {
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVoucherDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1 * 1024 * 1024,
+            message: 'File size must not exceed 1MB',
+          }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     const voucher = await this.voucherService.updateVoucher(
       id,
