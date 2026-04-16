@@ -475,7 +475,7 @@ export class GreenWasteAiRepository {
     ]);
 
     return {
-      totalQuantity: aggregation._sum.quantity || 0,
+      totalQuantity: Math.round((aggregation._sum.quantity || 0) * 100) / 100,
       totalActions: aggregation._count.id,
       totalUniqueDistricts: districts.length,
       totalUniqueCities: cities.length,
@@ -498,7 +498,7 @@ export class GreenWasteAiRepository {
       district: r.district || '',
       city: r.city || '',
       totalActions: r._count.id,
-      totalQuantity: r._sum.quantity || 0,
+      totalQuantity: Math.round((r._sum.quantity || 0) * 100) / 100,
     }));
   }
 
@@ -605,7 +605,7 @@ export class GreenWasteAiRepository {
       district,
       city: cityResult?.city || '',
       totalActions: aggregation._count.id,
-      totalQuantity: aggregation._sum.quantity || 0,
+      totalQuantity: Math.round((aggregation._sum.quantity || 0) * 100) / 100,
       verifiedActions: aggregation._count.id,
       rejectedActions: rejectedCount,
       totalPoints: aggregation._sum.points || 0,
@@ -613,7 +613,7 @@ export class GreenWasteAiRepository {
       byCategory: categoryStats.map((s) => ({
         category: s.category,
         count: s._count.id,
-        quantity: s._sum.quantity || 0,
+        quantity: Math.round((s._sum.quantity || 0) * 100) / 100,
       })),
       recentActions: recentActions.map((a) => ({
         category: a.category,
@@ -707,7 +707,7 @@ export class GreenWasteAiRepository {
       _sum: { quantity: true },
     });
 
-    return result._sum.quantity ?? 0;
+    return Math.round((result._sum.quantity ?? 0) * 100) / 100;
   }
 
   /**
