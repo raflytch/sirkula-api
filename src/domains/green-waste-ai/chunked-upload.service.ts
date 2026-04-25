@@ -1,7 +1,7 @@
 /**
  * @fileoverview Chunked Upload Service
  * @description Manages in-memory chunked file uploads to bypass Vercel 1.5MB body limit.
- *              Frontend sends base64-encoded 1MB chunks; this service reassembles them.
+ *              Frontend sends base64-encoded 512KB chunks; this service reassembles them.
  */
 
 import {
@@ -46,14 +46,24 @@ export class ChunkedUploadService {
   private readonly sessions = new Map<string, UploadSession>();
 
   /**
-   * Max total file size: 10 MB
+   * Chunking is only allowed for videos larger than direct upload limit
    */
-  private readonly MAX_TOTAL_SIZE = 10 * 1024 * 1024;
+  private readonly DIRECT_UPLOAD_THRESHOLD = Math.floor(1.2 * 1024 * 1024);
 
   /**
-   * Max single chunk size: 1 MB (raw bytes, before base64 encoding)
+   * Max total video size: 15 MB
    */
-  private readonly MAX_CHUNK_SIZE = 1 * 1024 * 1024;
+  private readonly MAX_VIDEO_TOTAL_SIZE = 15 * 1024 * 1024;
+
+  /**
+   * Max single chunk size: 512 KB (raw bytes, before base64 encoding)
+   */
+  private readonly MAX_CHUNK_SIZE = 512 * 1024;
+
+  /**
+   * Max total chunks per upload session
+   */
+  private readonly MAX_TOTAL_CHUNKS = 40;
 
   /**
    * Session TTL: 10 minutes
@@ -61,13 +71,9 @@ export class ChunkedUploadService {
   private readonly SESSION_TTL_MS = 10 * 60 * 1000;
 
   /**
-   * Allowed MIME types (images + videos)
+   * Allowed MIME types for chunked upload (videos only)
    */
   private readonly ALLOWED_MIME_TYPES = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
     'video/mp4',
     'video/mpeg',
     'video/webm',
@@ -94,14 +100,29 @@ export class ChunkedUploadService {
       );
     }
 
-    if (totalSize > this.MAX_TOTAL_SIZE) {
+    if (totalSize <= this.DIRECT_UPLOAD_THRESHOLD) {
       throw new BadRequestException(
-        `File size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds maximum allowed (${this.MAX_TOTAL_SIZE / (1024 * 1024)}MB)`,
+        'Chunked upload is only for videos larger than 1.2MB. Upload this file directly.',
       );
     }
 
-    if (totalChunks < 1 || totalChunks > 20) {
-      throw new BadRequestException('Total chunks must be between 1 and 20');
+    if (totalSize > this.MAX_VIDEO_TOTAL_SIZE) {
+      throw new BadRequestException(
+        `Video size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds maximum allowed (${this.MAX_VIDEO_TOTAL_SIZE / (1024 * 1024)}MB)`,
+      );
+    }
+
+    if (totalChunks < 1 || totalChunks > this.MAX_TOTAL_CHUNKS) {
+      throw new BadRequestException(
+        `Total chunks must be between 1 and ${this.MAX_TOTAL_CHUNKS}`,
+      );
+    }
+
+    const minRequiredChunks = Math.ceil(totalSize / this.MAX_CHUNK_SIZE);
+    if (totalChunks < minRequiredChunks) {
+      throw new BadRequestException(
+        `Total chunks is too small for declared file size. Minimum required: ${minRequiredChunks}`,
+      );
     }
 
     const uploadId = randomUUID();
@@ -171,8 +192,15 @@ export class ChunkedUploadService {
       );
     }
 
+    const nextTotalBytes = session.receivedBytes + chunkBuffer.length;
+    if (nextTotalBytes > this.MAX_VIDEO_TOTAL_SIZE) {
+      throw new BadRequestException(
+        `Accumulated upload size exceeds maximum allowed (${this.MAX_VIDEO_TOTAL_SIZE / (1024 * 1024)}MB)`,
+      );
+    }
+
     session.chunks.set(chunkIndex, chunkBuffer);
-    session.receivedBytes += chunkBuffer.length;
+    session.receivedBytes = nextTotalBytes;
 
     const receivedChunks = session.chunks.size;
     const complete = receivedChunks === session.totalChunks;
@@ -217,6 +245,20 @@ export class ChunkedUploadService {
 
     const assembledBuffer = Buffer.concat(orderedBuffers);
 
+    if (assembledBuffer.length > this.MAX_VIDEO_TOTAL_SIZE) {
+      this.sessions.delete(uploadId);
+      throw new BadRequestException(
+        `File size (${(assembledBuffer.length / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allowed (${this.MAX_VIDEO_TOTAL_SIZE / (1024 * 1024)}MB)`,
+      );
+    }
+
+    if (assembledBuffer.length !== session.totalSize) {
+      this.sessions.delete(uploadId);
+      throw new BadRequestException(
+        `Assembled file size mismatch. Expected ${session.totalSize} bytes, got ${assembledBuffer.length} bytes.`,
+      );
+    }
+
     // Clean up
     this.sessions.delete(uploadId);
 
@@ -236,7 +278,6 @@ export class ChunkedUploadService {
    * Remove expired sessions from memory
    */
   private cleanupStale(): void {
-    const now = Date.now();
     for (const [id, session] of this.sessions.entries()) {
       if (this.isSessionExpired(session)) {
         this.sessions.delete(id);

@@ -56,6 +56,9 @@ import {
 @ApiTags('Green Actions')
 @Controller('green-actions')
 export class GreenWasteAiController {
+  private readonly DIRECT_UPLOAD_MAX_SIZE = Math.floor(1.2 * 1024 * 1024);
+  private readonly MAX_CHUNKED_VIDEO_SIZE = 15 * 1024 * 1024;
+
   /**
    * Inject green waste AI service
    * @param {GreenWasteAiService} greenWasteAiService - Green waste AI service
@@ -213,7 +216,7 @@ export class GreenWasteAiController {
   @ApiOperation({
     summary: 'Initialize chunked upload',
     description:
-      'Start a chunked upload session for files up to 10MB. Returns an uploadId used to send chunks.',
+      'Start a chunked upload session for video files larger than 1.2MB (max 15MB) with 512KB chunk size. Returns an uploadId used to send chunks.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -270,7 +273,7 @@ export class GreenWasteAiController {
   @ApiOperation({
     summary: 'Upload a file chunk',
     description:
-      'Send a base64-encoded chunk (max ~1MB raw). Send chunks sequentially or in parallel.',
+      'Send a base64-encoded chunk (max 512KB raw). Send chunks sequentially or in parallel.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -392,12 +395,11 @@ export class GreenWasteAiController {
           type: 'string',
           format: 'binary',
           description:
-            'Image or video file (max 1.5MB direct upload). For larger files up to 10MB, use chunked upload.',
+            'Direct upload max 1.2MB (image/video). Video >1.2MB must use chunked upload (512KB/chunk, max 15MB).',
         },
         mediaUploadId: {
           type: 'string',
-          description:
-            'Upload ID from chunked upload (alternative to media file)',
+          description: 'Upload ID from chunked upload (only for video >1.2MB)',
           example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         },
       },
@@ -467,9 +469,9 @@ export class GreenWasteAiController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({
-            maxSize: 1.5 * 1024 * 1024,
+            maxSize: Math.floor(1.2 * 1024 * 1024),
             message:
-              'Direct upload file size must not exceed 1.5MB. Use chunked upload for larger files.',
+              'Direct upload file size must not exceed 1.2MB. For video >1.2MB, use chunked upload.',
           }),
         ],
         fileIsRequired: false,
@@ -477,10 +479,17 @@ export class GreenWasteAiController {
     )
     file?: Express.Multer.File,
   ) {
+    if (file && dto.mediaUploadId) {
+      throw new BadRequestException(
+        'Provide either media file or mediaUploadId, not both',
+      );
+    }
+
     let actualFile: Express.Multer.File;
 
     if (file) {
-      // Direct upload (small file <= 1.5MB)
+      // Direct upload
+      this.validateDirectUploadFile(file);
       actualFile = file;
     } else if (dto.mediaUploadId) {
       // Chunked upload — reassemble from session
@@ -500,6 +509,7 @@ export class GreenWasteAiController {
         filename: assembled.originalname,
         path: '',
       };
+      this.validateChunkedVideoFile(actualFile);
     } else {
       throw new BadRequestException(
         'Either a media file or mediaUploadId (from chunked upload) is required',
@@ -517,6 +527,32 @@ export class GreenWasteAiController {
       message: 'Green action submitted successfully',
       data: result,
     };
+  }
+
+  private validateDirectUploadFile(file: Express.Multer.File): void {
+    if (file.size > this.DIRECT_UPLOAD_MAX_SIZE) {
+      throw new BadRequestException(
+        `Direct upload file size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allowed (1.2MB). Video larger than 1.2MB must use chunked upload, while image larger than 1.2MB is rejected.`,
+      );
+    }
+  }
+
+  private validateChunkedVideoFile(file: Express.Multer.File): void {
+    if (!file.mimetype.startsWith('video/')) {
+      throw new BadRequestException('Chunked upload only supports video files');
+    }
+
+    if (file.size <= this.DIRECT_UPLOAD_MAX_SIZE) {
+      throw new BadRequestException(
+        'Video size must be larger than 1.2MB to use chunked upload. Upload this file directly.',
+      );
+    }
+
+    if (file.size > this.MAX_CHUNKED_VIDEO_SIZE) {
+      throw new BadRequestException(
+        `Video size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum chunked upload limit (${this.MAX_CHUNKED_VIDEO_SIZE / (1024 * 1024)}MB)`,
+      );
+    }
   }
 
   @Get('districts')

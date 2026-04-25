@@ -4,7 +4,15 @@
  */
 
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  Matches,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 /**
  * DTO for initializing a chunked upload session
@@ -19,35 +27,40 @@ export class InitChunkedUploadDto {
   fileName: string;
 
   @ApiProperty({
-    description: 'MIME type of the file',
-    example: 'image/jpeg',
+    description: 'MIME type of the file (video only for chunked upload)',
+    example: 'video/mp4',
   })
   @IsNotEmpty({ message: 'MIME type is required' })
   @IsString({ message: 'MIME type must be a string' })
+  @Matches(/^video\//, {
+    message: 'Chunked upload only supports video MIME types',
+  })
   mimeType: string;
 
   @ApiProperty({
-    description: 'Total file size in bytes',
+    description: 'Total video size in bytes (>1.2MB and <=15MB)',
     example: 5242880,
-    minimum: 1,
-    maximum: 10485760,
+    minimum: Math.floor(1.2 * 1024 * 1024) + 1,
+    maximum: 15728640,
   })
   @IsNotEmpty({ message: 'Total size is required' })
   @IsInt({ message: 'Total size must be an integer' })
-  @Min(1, { message: 'Total size must be at least 1 byte' })
-  @Max(10 * 1024 * 1024, { message: 'Total size must not exceed 10MB' })
+  @Min(Math.floor(1.2 * 1024 * 1024) + 1, {
+    message: 'Video size must be greater than 1.2MB for chunked upload',
+  })
+  @Max(15 * 1024 * 1024, { message: 'Video size must not exceed 15MB' })
   totalSize: number;
 
   @ApiProperty({
     description: 'Total number of chunks to be uploaded',
     example: 5,
     minimum: 1,
-    maximum: 20,
+    maximum: 40,
   })
   @IsNotEmpty({ message: 'Total chunks is required' })
   @IsInt({ message: 'Total chunks must be an integer' })
   @Min(1, { message: 'At least 1 chunk is required' })
-  @Max(20, { message: 'Maximum 20 chunks allowed' })
+  @Max(40, { message: 'Maximum 40 chunks allowed' })
   totalChunks: number;
 }
 
@@ -74,7 +87,7 @@ export class UploadChunkDto {
   chunkIndex: number;
 
   @ApiProperty({
-    description: 'Base64-encoded chunk data (max ~1MB raw)',
+    description: 'Base64-encoded chunk data (max 512KB raw)',
     example: '/9j/4AAQSkZJRgABAQ...',
   })
   @IsNotEmpty({ message: 'Chunk data is required' })

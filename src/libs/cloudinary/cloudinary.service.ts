@@ -207,6 +207,7 @@ export class CloudinaryService implements OnModuleInit {
         quality: 'auto',
         format: 'webp',
       },
+      maxFileSize: Math.floor(1.2 * 1024 * 1024),
     });
   }
 
@@ -224,6 +225,7 @@ export class CloudinaryService implements OnModuleInit {
         crop: 'limit',
         quality: 'auto',
       },
+      maxFileSize: 15 * 1024 * 1024,
     });
   }
 

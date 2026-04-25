@@ -16,7 +16,7 @@ async function bootstrap() {
 
   /**
    * Increase body parser limits for chunked uploads.
-   * Each chunk is ~1MB raw → ~1.37MB base64-encoded JSON.
+   * Each chunk is 512KB raw -> ~0.67MB base64-encoded JSON.
    */
   app.use(json({ limit: '2mb' }));
   app.use(urlencoded({ extended: true, limit: '2mb' }));

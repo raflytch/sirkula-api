@@ -124,10 +124,12 @@ export class CreateGreenActionDto {
 
   /**
    * Upload ID from chunked upload session (alternative to direct file upload).
-   * Use this when the file is larger than 1.5MB and was uploaded via chunked upload endpoints.
+   * Use this only for video uploads larger than 1.2MB
+   * that were uploaded through chunked endpoints.
    */
   @ApiPropertyOptional({
-    description: 'Upload ID dari chunked upload (gunakan jika file > 1.5MB)',
+    description:
+      'Upload ID dari chunked upload (khusus video >1.2MB sampai 15MB, chunk 512KB)',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   @IsOptional()
