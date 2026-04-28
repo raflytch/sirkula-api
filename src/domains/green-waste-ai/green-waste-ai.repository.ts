@@ -32,11 +32,36 @@ import {
  */
 @Injectable()
 export class GreenWasteAiRepository {
+  private static readonly WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+  private static readonly ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
   /**
    * Inject database service
    * @param {DatabaseService} db - Prisma database service
    */
   constructor(private readonly db: DatabaseService) {}
+
+  /**
+   * Get today's range using WIB day boundaries (00:00-24:00 WIB).
+   */
+  private getCurrentWibDayRange(reference: Date = new Date()): {
+    startOfDay: Date;
+    endOfDay: Date;
+  } {
+    const shiftedToWib = new Date(
+      reference.getTime() + GreenWasteAiRepository.WIB_OFFSET_MS,
+    );
+    shiftedToWib.setUTCHours(0, 0, 0, 0);
+
+    const startOfDay = new Date(
+      shiftedToWib.getTime() - GreenWasteAiRepository.WIB_OFFSET_MS,
+    );
+    const endOfDay = new Date(
+      startOfDay.getTime() + GreenWasteAiRepository.ONE_DAY_MS,
+    );
+
+    return { startOfDay, endOfDay };
+  }
 
   /**
    * Create a new green action
@@ -689,20 +714,19 @@ export class GreenWasteAiRepository {
   // ═══════════════════════════════════════════════════════════════════
 
   /**
-   * Sum of quantity for a user + sub-category today (UTC day boundaries).
+   * Sum of quantity for a user + sub-category today (WIB day boundaries).
    */
   async getUserDailyQuantity(
     userId: string,
     subCategory: string,
   ): Promise<number> {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const { startOfDay, endOfDay } = this.getCurrentWibDayRange();
 
     const result = await this.db.green_action.aggregate({
       where: {
         user_id: userId,
         action_type: subCategory,
-        created_at: { gte: startOfDay },
+        created_at: { gte: startOfDay, lt: endOfDay },
       },
       _sum: { quantity: true },
     });
@@ -726,16 +750,33 @@ export class GreenWasteAiRepository {
   }
 
   /**
-   * Total actions submitted by a user today (across all categories).
+   * Total actions submitted by a user today (across all categories, WIB day boundaries).
    */
   async getUserDailyActionCount(userId: string): Promise<number> {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const { startOfDay, endOfDay } = this.getCurrentWibDayRange();
 
     return this.db.green_action.count({
       where: {
         user_id: userId,
-        created_at: { gte: startOfDay },
+        created_at: { gte: startOfDay, lt: endOfDay },
+      },
+    });
+  }
+
+  /**
+   * Total actions submitted by a user today for a specific category (WIB day boundaries).
+   */
+  async getUserDailyActionCountByCategory(
+    userId: string,
+    category: string,
+  ): Promise<number> {
+    const { startOfDay, endOfDay } = this.getCurrentWibDayRange();
+
+    return this.db.green_action.count({
+      where: {
+        user_id: userId,
+        category,
+        created_at: { gte: startOfDay, lt: endOfDay },
       },
     });
   }

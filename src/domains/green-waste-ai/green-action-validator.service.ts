@@ -2,7 +2,7 @@
  * @fileoverview Green Action Validator Service
  * @description Multi-layered anti-cheat validation for green actions
  *
- * Layer 1 — Rule-based: max quantity per action/day, cooldown, global daily cap
+ * Layer 1 — Rule-based: max quantity per action/day, category cap, cooldown, global daily cap
  * Layer 2 — Anomaly detection: flag outlier quantities for admin review
  * Layer 3 — Proof: already enforced (media upload + GPS required)
  * Layer 4 — Trust / reputation: limits scale with user trust level
@@ -23,6 +23,7 @@ import {
   TRUST_LEVEL_CONFIG,
   FLAG_THRESHOLD_FOR_DOWNGRADE,
   MAX_ACTIONS_PER_DAY,
+  MAX_ACTIONS_PER_CATEGORY_PER_DAY,
 } from './constants/validation.constants';
 
 export interface IValidationResult {
@@ -88,7 +89,17 @@ export class GreenActionValidatorService {
       }
     }
 
-    // Layer 1c: Cooldown between same-category actions
+    // Layer 1c: Daily action cap per category
+    const todayCategoryActionCount =
+      await this.repository.getUserDailyActionCountByCategory(userId, category);
+    if (todayCategoryActionCount >= MAX_ACTIONS_PER_CATEGORY_PER_DAY) {
+      return this.reject(
+        ValidationFailureType.DAILY_LIMIT_EXCEEDED,
+        `Anda sudah mencapai batas ${MAX_ACTIONS_PER_CATEGORY_PER_DAY} aksi untuk kategori ${category} hari ini. Coba lagi besok atau pilih kategori lain.`,
+      );
+    }
+
+    // Layer 1d: Cooldown between same-category actions
     const cooldownMinutes =
       COOLDOWN_MINUTES[category] ?? DEFAULT_COOLDOWN_MINUTES;
     const lastActionAt = await this.repository.getLastActionTime(
@@ -107,7 +118,7 @@ export class GreenActionValidatorService {
       }
     }
 
-    // Layer 1d: Global daily action cap
+    // Layer 1e: Global daily action cap
     const todayActionCount =
       await this.repository.getUserDailyActionCount(userId);
     if (todayActionCount >= MAX_ACTIONS_PER_DAY) {
