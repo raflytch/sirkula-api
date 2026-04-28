@@ -172,8 +172,6 @@ export enum ValidationFailureType {
   DAILY_LIMIT_EXCEEDED = 'DAILY_LIMIT_EXCEEDED',
   /** Hard-rejected: submitted too soon after last action */
   COOLDOWN_ACTIVE = 'COOLDOWN_ACTIVE',
-  /** Hard-rejected: too many actions today */
-  GLOBAL_DAILY_CAP = 'GLOBAL_DAILY_CAP',
   /** Soft-flagged: anomalous quantity, needs admin review */
   ANOMALY_FLAGGED = 'ANOMALY_FLAGGED',
 }

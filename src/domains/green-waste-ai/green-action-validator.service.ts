@@ -2,7 +2,7 @@
  * @fileoverview Green Action Validator Service
  * @description Multi-layered anti-cheat validation for green actions
  *
- * Layer 1 — Rule-based: max quantity per action/day, category cap, cooldown, global daily cap
+ * Layer 1 — Rule-based: max quantity per action/day, category cap, cooldown
  * Layer 2 — Anomaly detection: flag outlier quantities for admin review
  * Layer 3 — Proof: already enforced (media upload + GPS required)
  * Layer 4 — Trust / reputation: limits scale with user trust level
@@ -22,7 +22,6 @@ import {
   ANOMALY_MIN_HISTORY,
   TRUST_LEVEL_CONFIG,
   FLAG_THRESHOLD_FOR_DOWNGRADE,
-  MAX_ACTIONS_PER_DAY,
   MAX_ACTIONS_PER_CATEGORY_PER_DAY,
 } from './constants/validation.constants';
 
@@ -116,16 +115,6 @@ export class GreenActionValidatorService {
           `Harap tunggu ${waitMinutes} menit lagi sebelum submit aksi ${category} berikutnya.`,
         );
       }
-    }
-
-    // Layer 1e: Global daily action cap
-    const todayActionCount =
-      await this.repository.getUserDailyActionCount(userId);
-    if (todayActionCount >= MAX_ACTIONS_PER_DAY) {
-      return this.reject(
-        ValidationFailureType.GLOBAL_DAILY_CAP,
-        `Anda sudah mencapai batas ${MAX_ACTIONS_PER_DAY} aksi per hari. Coba lagi besok.`,
-      );
     }
 
     // Layer 2: Anomaly detection (soft flag)

@@ -90,11 +90,6 @@ export const TRUST_LEVEL_CONFIG = {
 export const FLAG_THRESHOLD_FOR_DOWNGRADE = 3;
 
 /**
- * Maximum number of actions per day (across all categories) as a global cap.
- */
-export const MAX_ACTIONS_PER_DAY = 15;
-
-/**
  * Maximum number of actions per category per day.
  */
 export const MAX_ACTIONS_PER_CATEGORY_PER_DAY = 3;
