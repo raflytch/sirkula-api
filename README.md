@@ -8,7 +8,7 @@ Platform aksi hijau berbasis AI untuk mendorong partisipasi warga dalam pengelol
 
 - 🤖 **AI-Powered Verification** - Verifikasi otomatis aksi hijau menggunakan Google Generative AI
 - 🔐 **Authentication** - Google OAuth & Email OTP
-- 🎯 **Gamification** - Sistem poin, badge, dan leaderboard
+- 🎯 **Gamification** - Sistem poin, trust level progresif, kuis edukasi mingguan, dan leaderboard
 - 🎁 **Reward System** - Penukaran poin ke voucher UMKM hijau
 - 📊 **Dashboard & Reporting** - Statistik aksi hijau per kelurahan/RT/RW
 - 🔗 **Webhook Integration** - Daily reward distribution via external scheduler
@@ -39,6 +39,28 @@ Platform aksi hijau berbasis AI untuk mendorong partisipasi warga dalam pengelol
 3. Backend konversi skor → poin
 4. Poin dikumpulkan untuk reward UMKM
 ```
+
+## 🎮 Sistem Poin, Trust Level, dan Edukasi
+
+### Trust Level & Anti-Fraud (Implementasi Saat Ini)
+
+- Batas jumlah aksi saat ini adalah maksimal **3 upload per kategori per hari** untuk semua pengguna.
+- Trust level user (`NEW`, `TRUSTED`, `FLAGGED`) memengaruhi batas kuantitas per aksi dan batas kuantitas harian per sub-kategori.
+- `NEW` akan naik ke `TRUSTED` setelah mencapai **10 aksi `VERIFIED` non-flagged**.
+- User dapat diturunkan ke `FLAGGED` jika akumulasi aksi ter-flag mencapai **3 kali**.
+- Sistem anti-fraud menggunakan **rule-based anomaly detection** (berbasis pola historis kuantitas), lalu aksi ditandai untuk **review admin**.
+- Aksi yang ter-flag tetap tersimpan, tetapi poin ditahan sampai admin menyetujui.
+
+### Quiz Edukasi Mingguan
+
+- Warga dapat mengikuti quiz edukasi maksimal **2 kali per minggu**.
+- Setiap quiz berisi **10 soal**, dan tiap jawaban benar bernilai **5 poin**.
+- Riwayat hasil quiz tersimpan di database dan tersedia melalui endpoint riwayat quiz.
+
+### Leaderboard Warga
+
+- Leaderboard menggunakan akumulasi `total_points` (**ALL_TIME**) untuk user role `WARGA` yang aktif.
+- Papan peringkat mendorong kompetisi sehat dan menjadi dasar distribusi daily reward.
 
 ## 🏆 Daily Reward System
 
